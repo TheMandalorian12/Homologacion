@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Visor de Logs</title>
+<style>
+  :root{
+    --bg: #11151a;
+    --bg-elev: #171c22;
+    --bg-elev-2: #1e242b;
+    --line: #2a323b;
+    --text: #dfe4e8;
+    --text-dim: #8a94a0;
+    --accent: #e2a53d;
+    --accent-dim: #7a6435;
+    --info: #5b9bd5;
+    --debug: #6b7684;
+    --error: #ef4565;
+    --error-bg: rgba(239,69,101,0.12);
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--ui); font-size:14px;
+    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; gap:16px;
+    padding:12px 18px; border-bottom:1px solid var(--line);
+    background:var(--bg-elev); flex-shrink:0;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .brand h1{ font-size:15px; font-weight:600; margin:0; letter-spacing:.2px; }
+  .brand small{ color:var(--text-dim); font-weight:400; margin-left:6px; }
+
+  .upload-zone{
+    display:flex; align-items:center; gap:8px;
+    border:1px dashed var(--line); border-radius:6px;
+    padding:6px 12px; cursor:pointer; color:var(--text-dim);
+    font-size:12.5px; transition:border-color .15s, color .15s;
+  }
+  .upload-zone:hover, .upload-zone.dragover{ border-color:var(--accent); color:var(--accent); }
+  .upload-zone input{ display:none; }
+
+  .stats-strip{ display:flex; gap:18px; margin-left:auto; font-size:12px; color:var(--text-dim); font-family:var(--mono); }
+  .stats-strip b{ color:var(--text); font-weight:600; }
+  .stats-strip .lvl-info b{color:var(--info);}
+  .stats-strip .lvl-debug b{color:var(--debug);}
+  .stats-strip .lvl-error b{color:var(--error);}
+
+  /* ---------- Layout ---------- */
+  .layout{ flex:1; display:flex; min-height:0; }
+
+  .sidebar{
+    width:270px; flex-shrink:0; border-right:1px solid var(--line);
+    background:var(--bg-elev); display:flex; flex-direction:column; min-height:0;
+  }
+  .sidebar-head{ padding:12px 14px 8px; }
+  .sidebar-head input{
+    width:100%; background:var(--bg); border:1px solid var(--line); border-radius:5px;
+    color:var(--text); padding:7px 9px; font-size:12.5px; font-family:var(--ui);
+  }
+  .sidebar-head input:focus{ outline:none; border-color:var(--accent-dim); }
+  .sidebar-title{ padding:2px 14px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); }
+  .service-list{ flex:1; overflow-y:auto; padding:0 8px 12px; }
+  .service-item{
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+    padding:7px 10px; border-radius:5px; cursor:pointer; color:var(--text-dim);
+    font-size:12.5px; margin-bottom:1px;
+  }
+  .service-item:hover{ background:var(--bg-elev-2); color:var(--text); }
+  .service-item.active{ background:rgba(226,165,61,0.14); color:var(--accent); }
+  .service-item .cnt{ font-family:var(--mono); font-size:11px; opacity:.75; }
+  .service-item .name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .method-sub{ padding-left:18px; }
+  .method-sub .service-item{ font-size:11.5px; }
+
+  .empty-side{ padding:20px 16px; color:var(--text-dim); font-size:12px; line-height:1.5; }
+
+  /* ---------- Main ---------- */
+  .main{ flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; }
+
+  .filter-bar{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:10px 18px; border-bottom:1px solid var(--line); flex-shrink:0;
+  }
+  .breadcrumb{ font-family:var(--mono); font-size:12.5px; color:var(--accent); display:flex; align-items:center; gap:6px; }
+  .breadcrumb .clear{
+    cursor:pointer; color:var(--text-dim); border:1px solid var(--line); border-radius:4px;
+    padding:1px 7px; font-family:var(--ui); font-size:11px;
+  }
+  .breadcrumb .clear:hover{ color:var(--text); border-color:var(--text-dim); }
+
+  .lvl-toggle{ display:flex; gap:6px; }
+  .lvl-btn{
+    font-family:var(--mono); font-size:11px; padding:4px 9px; border-radius:4px;
+    border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--text-dim);
+  }
+  .lvl-btn.on.INFO{ color:var(--info); border-color:var(--info); background:rgba(91,155,213,.1); }
+  .lvl-btn.on.DEBUG{ color:var(--debug); border-color:var(--debug); background:rgba(107,118,132,.15); }
+  .lvl-btn.on.ERROR{ color:var(--error); border-color:var(--error); background:rgba(239,69,101,.1); }
+
+  .search-box{ margin-left:auto; }
+  .search-box input{
+    width:230px; background:var(--bg-elev-2); border:1px solid var(--line); border-radius:5px;
+    color:var(--text); padding:6px 10px; font-size:12.5px; font-family:var(--ui);
+  }
+  .search-box input:focus{ outline:none; border-color:var(--accent-dim); }
+
+  /* ---------- Chart ---------- */
+  .chart-wrap{ padding:14px 18px 6px; border-bottom:1px solid var(--line); flex-shrink:0; }
+  .chart-title{ font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px; display:flex; justify-content:space-between; }
+  .chart-title .hint{ text-transform:none; letter-spacing:0; opacity:.7; }
+  #chartSvg{ width:100%; display:block; overflow:visible; }
+  .bar{ cursor:pointer; }
+  .bar:hover rect{ filter:brightness(1.25); }
+  .bar-label{ font-family:var(--mono); font-size:9.5px; fill:var(--text-dim); }
+  .bar-count{ font-family:var(--mono); font-size:9.5px; fill:var(--text); }
+
+  .stats-panel{ display:flex; gap:14px; align-items:center; justify-content:space-between; }
+
+  .reload-zone{
+    display:flex; align-items:center; gap:12px; min-width:340px; width:fit-content;
+    border:1px dashed var(--line); border-radius:6px; padding:10px 20px;
+    cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .reload-zone:hover, .reload-zone.dragover{ border-color:var(--accent); background:rgba(226,165,61,0.06); }
+  .reload-zone input{ display:none; }
+  .reload-zone .reload-icon{ font-size:18px; color:var(--accent-dim); flex-shrink:0; }
+  .reload-zone:hover .reload-icon, .reload-zone.dragover .reload-icon{ color:var(--accent); }
+  .reload-text{ display:flex; flex-direction:column; gap:1px; }
+  .reload-text b{ font-size:12px; font-weight:600; color:var(--text); }
+  .reload-text small{ font-size:10.5px; color:var(--text-dim); }
+
+  /* Overlay de drop a pantalla completa */
+  .drop-overlay{
+    position:fixed; inset:0; z-index:100; display:none;
+    background:rgba(17,21,26,0.88); backdrop-filter:blur(2px);
+    align-items:center; justify-content:center; pointer-events:none;
+  }
+  .drop-overlay.show{ display:flex; }
+  .drop-overlay .inner{
+    border:2px dashed var(--accent); border-radius:14px;
+    padding:60px 90px; text-align:center; color:var(--text);
+    background:rgba(226,165,61,0.05);
+  }
+  .drop-overlay .inner .ico{ font-size:42px; color:var(--accent); display:block; margin-bottom:12px; }
+  .drop-overlay .inner .t1{ font-size:17px; font-weight:600; }
+  .drop-overlay .inner .t2{ font-size:12.5px; color:var(--text-dim); margin-top:4px; }
+
+  .lvl-counters{ display:flex; gap:10px; flex-shrink:0; }
+  .lvl-count-card{
+    width:84px; border-radius:8px; border:1px solid var(--line);
+    background:var(--bg-elev-2); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:8px 4px;
+  }
+  .lvl-count-num{ font-family:var(--mono); font-size:20px; font-weight:700; line-height:1.1; }
+  .lvl-count-label{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin-top:2px; }
+  .lvl-count-card.info{ border-color:rgba(91,155,213,.35); } .lvl-count-card.info .lvl-count-num{ color:var(--info); }
+  .lvl-count-card.debug{ border-color:rgba(107,118,132,.35); } .lvl-count-card.debug .lvl-count-num{ color:var(--debug); }
+  .lvl-count-card.error{ border-color:rgba(239,69,101,.45); } .lvl-count-card.error .lvl-count-num{ color:var(--error); }
+
+  /* ---------- Log list ---------- */
+  .log-scroll{ flex:1; overflow-y:auto; padding:0 0 30px; }
+  .hour-group{ }
+  .hour-header{
+    position:sticky; top:0; background:var(--bg); z-index:2;
+    padding:8px 18px 6px; font-family:var(--mono); font-size:11.5px; color:var(--accent);
+    border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:baseline;
+  }
+  .hour-header .n{ color:var(--text-dim); font-size:10.5px; }
+
+  .entry{
+    display:grid; grid-template-columns:74px 52px 230px 1fr; gap:12px;
+    padding:6px 18px; border-bottom:1px solid rgba(42,50,59,0.5);
+    font-family:var(--mono); font-size:12px; cursor:pointer; align-items:start;
+  }
+  .entry:hover{ background:var(--bg-elev); }
+  .entry .time{ color:var(--text-dim); }
+  .entry .lvl{ font-size:10px; font-weight:700; padding:1px 5px; border-radius:3px; width:fit-content; }
+  .entry .lvl.INFO{ color:var(--info); background:rgba(91,155,213,.12); }
+  .entry .lvl.DEBUG{ color:var(--debug); background:rgba(107,118,132,.15); }
+  .entry .lvl.ERROR{ color:var(--error); background:var(--error-bg); }
+  .entry .method{ color:#c9b691; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .entry .msg{ color:var(--text); white-space:pre-wrap; word-break:break-word; }
+  .entry .msg.collapsed{ display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+  .entry.expanded .msg{ white-space:pre-wrap; }
+  .more-tag{ color:var(--accent-dim); font-size:10.5px; margin-left:6px; }
+
+  .empty-main{
+    flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column;
+    color:var(--text-dim); gap:10px; text-align:center; padding:40px;
+  }
+  .empty-main .big{ font-size:15px; color:var(--text); }
+  .empty-main code{ background:var(--bg-elev-2); padding:2px 6px; border-radius:4px; font-family:var(--mono); }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:5px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+</style>
+</head>
+<body>
+
+<div class="drop-overlay" id="dropOverlay">
+  <div class="inner">
+    <span class="ico">⇪</span>
+    <div class="t1">Soltá el archivo para cargarlo</div>
+    <div class="t2">.log o .txt — reemplaza el log actual</div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span><h1>Visor de Logs<small id="fname"></small></h1></div>
+  <input type="file" id="fileInput" accept=".log,.txt" style="display:none">
+  <div class="stats-strip" id="statsStrip"></div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-head"><input id="serviceSearch" placeholder="Filtrar clase / servicio..."></div>
+    <div class="sidebar-title">Clases / Servicios</div>
+    <div class="service-list" id="serviceList">
+      <div class="empty-side">Cargá un archivo de log para ver las clases y servicios detectados.</div>
+    </div>
+  </div>
+
+  <div class="main" id="mainArea">
+    <div class="empty-main" id="emptyMain">
+      <div class="big">Todavía no hay ningún log cargado</div>
+      <div class="reload-zone" id="dropZone" style="max-width:420px;">
+        <span class="reload-icon">⇪</span>
+        <span class="reload-text"><b>Arrastrá el archivo aquí</b><small>o hacé click para cargar un .log / .txt</small></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const state = {
+    entries: [],       // {ts, date, hour, time, level, cls, method, service, message, raw}
+    filterService: null,   // full "Clase.metodo" or "Clase" (prefix)
+    filterLevels: new Set(['INFO','DEBUG','ERROR']),
+    search: '',
+    serviceFilterText: ''
+  };
+
+  const RECTOR_RE = /^(\d{2}\/\d{2}\/\d{4}) (\d{2}:\d{2}:\d{2}) \[\s*(\w+)\s*\]\s+(\S+)\s+\{(\d+)\}\s*-\s?(.*)$/;
+  const APEX_RE = /^(\d{2}:\d{2}:\d{2})\.(\d+) \((\d+)\)\|([A-Z_]+)(?:\|(.*))?$/;
+
+  function detectFormat(lines){
+    let checked = 0;
+    for(const l of lines){
+      if(!l.trim()) continue;
+      if(RECTOR_RE.test(l)) return 'rector';
+      if(APEX_RE.test(l)) return 'apex';
+      if(++checked >= 80) break;
+    }
+    return null;
+  }
+
+  function parseLog(text){
+    const lines = text.split(/\r\n|\n/);
+    const format = detectFormat(lines);
+    if(format === 'apex') return parseApex(lines);
+    if(format === 'rector') return parseRector(lines);
+    return [];
+  }
+
+  function parseRector(lines){
+    const entries = [];
+    let current = null;
+    for(const line of lines){
+      const m = line.match(RECTOR_RE);
+      if(m){
+        if(current) entries.push(current);
+        const [, date, time, level, service, lineNo, msg] = m;
+        const dotIdx = service.indexOf('.');
+        const cls = dotIdx>-1 ? service.slice(0,dotIdx) : service;
+        const method = dotIdx>-1 ? service.slice(dotIdx+1) : '';
+        const [dd,mm,yyyy] = date.split('/');
+        const ts = new Date(`${yyyy}-${mm}-${dd}T${time}`);
+        current = {
+          date, time, level, service, cls, method, lineNo,
+          ts: ts.getTime(),
+          hourKey: `${date} ${time.slice(0,2)}:00`,
+          message: msg
+        };
+      } else {
+        if(current){
+          if(line.trim() !== '') current.message += '\n' + line;
+        }
+      }
+    }
+    if(current) entries.push(current);
+    return entries;
+  }
+
+  // Salesforce Apex debug log: HH:MM:SS.d (nanos)|EVENT|detalles...
+  const APEX_ERROR_EVENTS = new Set(['EXCEPTION_THROWN','FATAL_ERROR','VALIDATION_FAIL','FLOW_ELEMENT_ERROR']);
+  const APEX_CLASSY_EVENTS = new Set(['METHOD_ENTRY','METHOD_EXIT','SYSTEM_METHOD_ENTRY','SYSTEM_METHOD_EXIT','CONSTRUCTOR_ENTRY','CONSTRUCTOR_EXIT','VF_APEX_CALL_START','VF_APEX_CALL_END','USER_DEBUG','SOQL_EXECUTE_BEGIN','CALLOUT_REQUEST','CALLOUT_RESPONSE','DML_BEGIN']);
+
+  function parseApex(lines){
+    const entries = [];
+    let current = null;
+    for(const line of lines){
+      const m = line.match(APEX_RE);
+      if(m){
+        if(current) entries.push(current);
+        const [, time, , , event, restRaw] = m;
+        const rest = restRaw || '';
+        const parts = rest.split('|');
+
+        let level = 'INFO';
+        let message = rest;
+        if(event === 'USER_DEBUG'){
+          // formato: [linea]|NIVEL|mensaje
+          const lvl = (parts[1]||'').toUpperCase();
+          if(lvl === 'ERROR' || lvl === 'FATAL') level = 'ERROR';
+          else if(['DEBUG','FINE','FINER','FINEST'].includes(lvl)) level = 'DEBUG';
+          else level = 'INFO';
+          message = parts.slice(2).join('|') || rest;
+        } else if(APEX_ERROR_EVENTS.has(event)){
+          level = 'ERROR';
+        } else if(event.startsWith('HEAP_') || event.startsWith('VARIABLE_') || event.startsWith('STATEMENT_')){
+          level = 'DEBUG';
+        }
+
+        // intentar extraer Clase.metodo del último campo para agrupar
+        let method = '';
+        if(APEX_CLASSY_EVENTS.has(event) && parts.length){
+          const last = parts[parts.length-1].trim();
+          if(/^[A-Za-z_][\w.]*(\(.*\))?$/.test(last) && last.length < 90) method = last;
+        }
+
+        current = {
+          date: '', time, level,
+          service: event + (method ? ' · '+method : ''),
+          cls: event, method,
+          ts: new Date('1970-01-01T'+time).getTime(),
+          hourKey: time.slice(0,2)+':00',
+          message
+        };
+      } else {
+        if(current && line.trim() !== '') current.message += '\n' + line;
+      }
+    }
+    if(current) entries.push(current);
+    return entries;
+  }
+
+  function loadFile(file){
+    const reader = new FileReader();
+    reader.onload = e => {
+      const entries = parseLog(e.target.result);
+      if(entries.length === 0){
+        alert('No se reconoció el formato del archivo "' + file.name + '".\nFormatos soportados:\n• Log estándar: DD/MM/AAAA HH:MM:SS [NIVEL] Clase.metodo {linea} - mensaje\n• Salesforce Apex debug log');
+        return;
+      }
+      state.entries = entries;
+      state.filterService = null;
+      state.serviceFilterText = '';
+      document.getElementById('fname').textContent = ' — ' + file.name;
+      renderAll();
+    };
+    reader.onerror = () => { alert('No se pudo leer el archivo.'); };
+    reader.readAsText(file);
+  }
+
+  const fileInput = document.getElementById('fileInput');
+  fileInput.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); e.target.value=''; });
+
+  const dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  // ---------- Drop a pantalla completa ----------
+  const overlay = document.getElementById('dropOverlay');
+  let dragDepth = 0;
+  document.addEventListener('dragenter', e => {
+    e.preventDefault();
+    if(e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')){
+      dragDepth++;
+      overlay.classList.add('show');
+    }
+  });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('dragleave', e => {
+    e.preventDefault();
+    dragDepth = Math.max(0, dragDepth-1);
+    if(dragDepth === 0) overlay.classList.remove('show');
+  });
+  document.addEventListener('drop', e => {
+    e.preventDefault();
+    dragDepth = 0;
+    overlay.classList.remove('show');
+    if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+
+  document.getElementById('serviceSearch').addEventListener('input', e => {
+    state.serviceFilterText = e.target.value.toLowerCase();
+    renderSidebar();
+  });
+
+  // ---------- Rendering ----------
+  function renderAll(){
+    renderStats();
+    renderSidebar();
+    renderMain();
+  }
+
+  function renderStats(){
+    const strip = document.getElementById('statsStrip');
+    if(state.entries.length === 0){ strip.innerHTML = ''; return; }
+    const counts = {INFO:0, DEBUG:0, ERROR:0};
+    let min=Infinity, max=-Infinity;
+    for(const e of state.entries){
+      counts[e.level] = (counts[e.level]||0)+1;
+      if(e.ts<min) min=e.ts; if(e.ts>max) max=e.ts;
+    }
+    const hasDate = state.entries[0].date !== '';
+    const fmt = t => { const d=new Date(t); return hasDate
+      ? d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+      : d.toISOString().slice(11,16); };
+    strip.innerHTML = `
+      <span><b>${state.entries.length}</b> entradas</span>
+      <span>${fmt(min)} → ${fmt(max)}</span>
+      <span class="lvl-info"><b>${counts.INFO||0}</b> INFO</span>
+      <span class="lvl-debug"><b>${counts.DEBUG||0}</b> DEBUG</span>
+      <span class="lvl-error"><b>${counts.ERROR||0}</b> ERROR</span>
+    `;
+  }
+
+  function groupBy(arr, fn){
+    const m = new Map();
+    for(const item of arr){ const k = fn(item); if(!m.has(k)) m.set(k, []); m.get(k).push(item); }
+    return m;
+  }
+
+  function renderSidebar(){
+    const list = document.getElementById('serviceList');
+    if(state.entries.length === 0){
+      list.innerHTML = '<div class="empty-side">Cargá un archivo de log para ver las clases y servicios detectados.</div>';
+      return;
+    }
+    const byClass = groupBy(state.entries, e => e.cls);
+    const classNames = [...byClass.keys()].sort((a,b)=> byClass.get(b).length - byClass.get(a).length);
+
+    let html = '';
+    for(const cls of classNames){
+      if(state.serviceFilterText && !cls.toLowerCase().includes(state.serviceFilterText)){
+        // still check methods below before skipping entirely
+      }
+      const classEntries = byClass.get(cls);
+      const classMatches = cls.toLowerCase().includes(state.serviceFilterText);
+      const byMethod = groupBy(classEntries, e => e.method);
+      const methodNames = [...byMethod.keys()].sort((a,b)=> byMethod.get(b).length - byMethod.get(a).length);
+      const anyMethodMatches = methodNames.some(m => (cls+'.'+m).toLowerCase().includes(state.serviceFilterText));
+      if(state.serviceFilterText && !classMatches && !anyMethodMatches) continue;
+
+      const activeClass = state.filterService === cls ? 'active' : '';
+      html += `<div class="service-item ${activeClass}" data-target="${escapeAttr(cls)}">
+                 <span class="name">${escapeHtml(cls)}</span><span class="cnt">${classEntries.length}</span>
+               </div>`;
+      if(methodNames.length > 1 || state.filterService === cls || state.serviceFilterText){
+        html += '<div class="method-sub">';
+        for(const meth of methodNames){
+          const full = cls + (meth ? '.'+meth : '');
+          if(state.serviceFilterText && !full.toLowerCase().includes(state.serviceFilterText) && !classMatches) continue;
+          const act = state.filterService === full ? 'active' : '';
+          html += `<div class="service-item ${act}" data-target="${escapeAttr(full)}">
+                     <span class="name">${escapeHtml(meth || '(sin método)')}</span><span class="cnt">${byMethod.get(meth).length}</span>
+                   </div>`;
+        }
+        html += '</div>';
+      }
+    }
+    list.innerHTML = html;
+
+    list.querySelectorAll('.service-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const target = el.getAttribute('data-target');
+        state.filterService = (state.filterService === target) ? null : target;
+        renderSidebar();
+        renderMain();
+      });
+    });
+  }
+
+  function currentFilteredEntries(){
+    return state.entries.filter(e => {
+      if(!state.filterLevels.has(e.level)) return false;
+      if(state.filterService){
+        const full = e.cls + (e.method ? '.'+e.method : '');
+        if(full !== state.filterService && e.cls !== state.filterService) return false;
+      }
+      if(state.search){
+        const hay = (e.message + ' ' + e.service).toLowerCase();
+        if(!hay.includes(state.search)) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderMain(){
+    const main = document.getElementById('mainArea');
+    if(state.entries.length === 0){
+      main.innerHTML = `<div class="empty-main" id="emptyMain">
+        <div class="big">Todavía no hay ningún log cargado</div>
+        <div>Arrastrá un archivo <code>.log</code> o <code>.txt</code>, o usá el botón "Cargar archivo" arriba.</div>
+      </div>`;
+      return;
+    }
+
+    const filtered = currentFilteredEntries();
+
+    main.innerHTML = `
+      <div class="filter-bar">
+        ${state.filterService ? `<div class="breadcrumb">📌 ${escapeHtml(state.filterService)} <span class="clear" id="clearFilter">✕ quitar</span></div>` : ''}
+        <div class="lvl-toggle" id="lvlToggle">
+          ${['INFO','DEBUG','ERROR'].map(l => `<button class="lvl-btn ${state.filterLevels.has(l)?'on '+l:''}" data-lvl="${l}">${l}</button>`).join('')}
+        </div>
+        <div class="search-box"><input id="searchInput" placeholder="Buscar en el mensaje..." value="${escapeAttr(state.search)}"></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title"><span>Resumen ${state.filterService ? '— '+escapeHtml(state.filterService) : ''}</span><span class="hint">${filtered.length} entradas visibles</span></div>
+        <div class="stats-panel">
+          <label class="reload-zone" id="reloadZone">
+            <span class="reload-icon">⇪</span>
+            <span class="reload-text"><b>Arrastrá el archivo aquí</b><small>o hacé click para cargar / reemplazar</small></span>
+            <input type="file" id="reloadInput" accept=".log,.txt">
+          </label>
+          <div class="lvl-counters" id="lvlCounters"></div>
+        </div>
+      </div>
+      <div class="log-scroll" id="logScroll"></div>
+    `;
+
+    document.getElementById('clearFilter')?.addEventListener('click', () => {
+      state.filterService = null; renderSidebar(); renderMain();
+    });
+    document.querySelectorAll('#lvlToggle .lvl-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const l = btn.getAttribute('data-lvl');
+        if(state.filterLevels.has(l)) state.filterLevels.delete(l); else state.filterLevels.add(l);
+        renderMain();
+      });
+    });
+    const searchInput = document.getElementById('searchInput');
+    searchInput.addEventListener('input', e => { state.search = e.target.value.toLowerCase(); renderMain(); searchInput.focus(); searchInput.setSelectionRange(state.search.length,state.search.length); });
+
+    setupReloadZone();
+    renderLevelCounters(filtered);
+    renderLogList(filtered);
+  }
+
+  function setupReloadZone(){
+    const zone = document.getElementById('reloadZone');
+    const input = document.getElementById('reloadInput');
+    input.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); e.target.value=''; });
+  }
+
+  function renderLevelCounters(filtered){
+    const el = document.getElementById('lvlCounters');
+    const counts = {INFO:0, DEBUG:0, ERROR:0};
+    for(const e of filtered) counts[e.level] = (counts[e.level]||0) + 1;
+    const defs = [
+      {key:'INFO', label:'Info', cls:'info'},
+      {key:'DEBUG', label:'Debug', cls:'debug'},
+      {key:'ERROR', label:'Error', cls:'error'}
+    ];
+    el.innerHTML = defs.map(d => `
+      <div class="lvl-count-card ${d.cls}">
+        <div class="lvl-count-num">${counts[d.key]}</div>
+        <div class="lvl-count-label">${d.label}</div>
+      </div>
+    `).join('');
+  }
+
+  function parseHourKey(k){
+    // "DD/MM/YYYY HH:00" o "HH:00" (logs sin fecha)
+    if(!k.includes('/')) return new Date('1970-01-01T'+k).getTime();
+    const [d, h] = k.split(' ');
+    const [dd,mm,yyyy] = d.split('/');
+    return new Date(`${yyyy}-${mm}-${dd}T${h}:00`).getTime();
+  }
+
+  function renderLogList(filtered){
+    const container = document.getElementById('logScroll');
+    if(filtered.length === 0){
+      container.innerHTML = '<div class="empty-side" style="padding:24px 18px;">No hay entradas que coincidan con los filtros actuales.</div>';
+      return;
+    }
+    const sorted = [...filtered].sort((a,b)=> a.ts - b.ts);
+    const byHour = groupBy(sorted, e => e.hourKey);
+    const keys = [...byHour.keys()].sort((a,b)=> parseHourKey(a)-parseHourKey(b));
+
+    let html = '';
+    for(const k of keys){
+      const group = byHour.get(k);
+      html += `<div class="hour-group">
+        <div class="hour-header" data-hourkey="${escapeAttr(k)}">${k} <span class="n">${group.length} entradas</span></div>`;
+      for(const e of group){
+        const firstLine = e.message.split('\n')[0];
+        const multi = e.message.includes('\n');
+        html += `<div class="entry" data-full="${multi?'1':'0'}">
+          <div class="time">${e.time}</div>
+          <div class="lvl ${e.level}">${e.level}</div>
+          <div class="method" title="${escapeAttr(e.service)}">${escapeHtml(e.service)}</div>
+          <div class="msg collapsed" data-first="${escapeAttr(firstLine)}" data-fullmsg="${escapeAttr(e.message)}">${escapeHtml(firstLine)}${multi?'<span class="more-tag">▾ ver más</span>':''}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    container.innerHTML = html;
+
+    container.querySelectorAll('.entry[data-full="1"]').forEach(row => {
+      row.addEventListener('click', () => {
+        const msgEl = row.querySelector('.msg');
+        const collapsing = !msgEl.classList.contains('collapsed');
+        if(collapsing){
+          msgEl.textContent = msgEl.getAttribute('data-first');
+          const tag = document.createElement('span');
+          tag.className = 'more-tag'; tag.textContent = '▾ ver más';
+          msgEl.appendChild(tag);
+        } else {
+          msgEl.textContent = msgEl.getAttribute('data-fullmsg');
+          const tag = document.createElement('span');
+          tag.className = 'more-tag'; tag.textContent = '▴ ver menos';
+          msgEl.appendChild(tag);
+        }
+        row.classList.toggle('expanded');
+        msgEl.classList.toggle('collapsed');
+      });
+    });
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr(str){ return escapeHtml(str); }
+  function cssEscape(str){ return String(str).replace(/["\\]/g, '\\$&'); }
+
+  window.addEventListener('resize', () => { if(state.entries.length) renderMain(); });
+})();
+</script>
+</body>
+</html>
