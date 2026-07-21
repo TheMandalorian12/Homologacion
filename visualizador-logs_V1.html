@@ -547,14 +547,26 @@
     document.querySelectorAll('#lvlToggle .lvl-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const l = btn.getAttribute('data-lvl');
-        if(state.filterLevels.has(l)) state.filterLevels.delete(l); else state.filterLevels.add(l);
-        renderMain();
+        if(state.filterLevels.has(l)){ state.filterLevels.delete(l); btn.classList.remove('on', l); }
+        else { state.filterLevels.add(l); btn.classList.add('on', l); }
+        refreshResults();
       });
     });
     const searchInput = document.getElementById('searchInput');
-    searchInput.addEventListener('input', e => { state.search = e.target.value.toLowerCase(); renderMain(); searchInput.focus(); searchInput.setSelectionRange(state.search.length,state.search.length); });
+    searchInput.addEventListener('input', e => { state.search = e.target.value.toLowerCase(); refreshResults(); });
 
     setupReloadZone();
+    renderLevelCounters(filtered);
+    renderLogList(filtered);
+  }
+
+  // Actualiza sólo los resultados (lista, contadores, contador de visibles)
+  // SIN reconstruir la barra de filtros, para que el input de búsqueda no pierda el foco.
+  function refreshResults(){
+    if(state.entries.length === 0) return;
+    const filtered = currentFilteredEntries();
+    const hint = document.querySelector('.chart-title .hint');
+    if(hint) hint.textContent = `${filtered.length} entradas visibles`;
     renderLevelCounters(filtered);
     renderLogList(filtered);
   }
