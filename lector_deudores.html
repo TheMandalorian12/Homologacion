@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lector Central de Deudores BCRA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --card-border:    #e1e0d9;
+
+    --tier-1: #86b6ef; /* Situacion 1 - Normal */
+    --tier-2: #5598e7; /* Situacion 2 - Riesgo bajo */
+    --tier-3: #2a78d6; /* Situacion 3 - Riesgo medio */
+    --tier-4: #1c5cab; /* Situacion 4 - Riesgo alto */
+    --tier-5: #104281; /* Situacion 5 - Irrecuperable */
+    --tier-11: #898781; /* Situacion 11 - cubierta, no clasificable */
+    --tier-otras: #c3c2b7;
+
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-serious:  #ec835a;
+    --status-critical: #d03b3b;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --card-border:    #2c2c2a;
+
+      --tier-1: #184f95;
+      --tier-2: #256abf;
+      --tier-3: #3987e5;
+      --tier-4: #6da7ec;
+      --tier-5: #9ec5f4;
+      --tier-11: #898781;
+      --tier-otras: #383835;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --card-border:    #2c2c2a;
+
+    --tier-1: #184f95;
+    --tier-2: #256abf;
+    --tier-3: #3987e5;
+    --tier-4: #6da7ec;
+    --tier-5: #9ec5f4;
+    --tier-11: #898781;
+    --tier-otras: #383835;
+  }
+
+  * { box-sizing: border-box; }
+  body.viz-root {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font);
+    background: var(--page-plane);
+    color: var(--text-primary);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header.app-header {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    margin-bottom: 22px;
+  }
+  header.app-header h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  header.app-header p { margin: 0; color: var(--text-secondary); max-width: 640px; font-size: 0.92rem; }
+  .theme-toggle {
+    border: 1px solid var(--card-border); background: var(--surface-1); color: var(--text-primary);
+    border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+  }
+  .theme-toggle:hover { background: var(--gridline); }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--card-border); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 20px;
+  }
+
+  #dropzone {
+    border: 2px dashed var(--baseline); border-radius: 12px; padding: 32px 20px; text-align: center;
+    background: var(--surface-1); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  #dropzone.dragover { border-color: var(--tier-4); background: color-mix(in srgb, var(--tier-4) 8%, var(--surface-1)); }
+  #dropzone p { margin: 4px 0; color: var(--text-secondary); font-size: 0.9rem; }
+  #dropzone strong { color: var(--text-primary); }
+  #fileInput { display: none; }
+  .or-sep { color: var(--text-muted); font-size: 0.8rem; margin: 14px 0; text-align: center; }
+  textarea#pasteArea {
+    width: 100%; min-height: 90px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.78rem;
+    border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; background: var(--surface-1);
+    color: var(--text-primary); resize: vertical;
+  }
+  .btn {
+    border: 1px solid var(--card-border); background: var(--tier-4); color: #fff; border-radius: 8px;
+    padding: 9px 16px; font-size: 0.88rem; cursor: pointer; font-weight: 600;
+  }
+  .btn:hover { opacity: 0.92; }
+  .btn.secondary { background: var(--surface-1); color: var(--text-primary); }
+  .btn-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+
+  #status { font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px; min-height: 18px; }
+  #status.error { color: var(--status-critical); }
+
+  #results { display: none; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px 18px; }
+  .stat-tile .label { font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+  .stat-tile .value { font-size: 1.7rem; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat-tile.alert .value { color: var(--status-critical); }
+
+  h2.section-title { font-size: 1.05rem; margin: 0 0 14px; }
+
+  .bar-row { display: grid; grid-template-columns: 230px 1fr 150px; align-items: center; gap: 12px; margin-bottom: 10px; position: relative; }
+  .bar-row .bar-label { font-size: 0.85rem; color: var(--text-primary); }
+  .bar-track { background: var(--gridline); border-radius: 4px; height: 18px; position: relative; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; min-width: 3px; }
+  .bar-value { font-size: 0.82rem; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar-tooltip {
+    position: absolute; bottom: 100%; left: 0; transform: translateY(-6px);
+    background: var(--text-primary); color: var(--surface-1); font-size: 0.75rem;
+    padding: 6px 9px; border-radius: 6px; white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity .1s; z-index: 5;
+  }
+  .bar-row:hover .bar-tooltip { opacity: 1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--gridline); white-space: nowrap; }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: .02em; position: sticky; top: 0; background: var(--surface-1); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #summaryTable td.tier-dot { width: 10px; padding-right: 0; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .filters input[type="text"], .filters select {
+    border: 1px solid var(--card-border); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem;
+    background: var(--surface-1); color: var(--text-primary);
+  }
+  .filters label { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+
+  .table-scroll { max-height: 520px; overflow: auto; border: 1px solid var(--card-border); border-radius: 10px; }
+
+  tr.alerta-row { background: color-mix(in srgb, var(--status-critical) 7%, transparent); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .badge.si { background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: var(--status-critical); }
+  .badge.no { background: color-mix(in srgb, var(--text-muted) 16%, transparent); color: var(--text-secondary); }
+
+  .pager { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; font-size: 0.85rem; color: var(--text-secondary); }
+  .pager .btn { padding: 6px 12px; }
+  .pager .btn:disabled { opacity: .4; cursor: default; }
+
+  footer.note { color: var(--text-muted); font-size: 0.78rem; margin-top: 24px; line-height: 1.5; }
+</style>
+</head>
+<body class="viz-root">
+  <div class="wrap">
+    <header class="app-header">
+      <div>
+        <h1>Lector Central de Deudores BCRA</h1>
+        <p>Cargue el archivo <code>deudores.txt</code> (o una exportacion con el mismo formato) para
+        decodificarlo y clasificarlo por situacion crediticia. Todo el procesamiento ocurre en su
+        navegador: el archivo no se envia a ningun servidor.</p>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button">Modo oscuro</button>
+    </header>
+
+    <div class="card">
+      <div id="dropzone">
+        <p><strong>Arrastre el archivo .txt aqui</strong> o haga clic para elegirlo.</p>
+        <p>Formato esperado: registro de ancho fijo de 171 caracteres (24 campos), segun el LEAME DEUDORES del BCRA.</p>
+      </div>
+      <input type="file" id="fileInput" accept=".txt,.csv,text/plain" />
+      <div class="or-sep">— o pegue el contenido crudo —</div>
+      <textarea id="pasteArea" placeholder="Pegue aqui las lineas del archivo de deudores..."></textarea>
+      <div class="btn-row">
+        <button class="btn" id="parseBtn" type="button">Procesar</button>
+        <button class="btn secondary" id="clearBtn" type="button">Limpiar</button>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div id="results">
+      <div class="stat-grid">
+        <div class="stat-tile">
+          <div class="label">Deudores procesados</div>
+          <div class="value" id="statTotal">0</div>
+        </div>
+        <div class="stat-tile">
+          <div class="label">Monto total en prestamos</div>
+          <div class="value" id="statMonto">$0</div>
+        </div>
+        <div class="stat-tile alert">
+          <div class="label">Con alertas de riesgo</div>
+          <div class="value" id="statAlertas">0</div>
+        </div>
+        <div class="stat-tile">
+          <div class="label">Entidades informantes</div>
+          <div class="value" id="statEntidades">0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Distribucion por situacion crediticia</h2>
+        <div id="barChart"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Resumen por situacion</h2>
+        <div style="overflow-x:auto">
+          <table id="summaryTable">
+            <thead>
+              <tr>
+                <th></th><th>Situacion</th><th class="num">Cantidad</th><th class="num">% deudores</th>
+                <th class="num">Monto (miles $)</th><th class="num">% monto</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Detalle de deudores</h2>
+        <div class="filters">
+          <input type="text" id="searchInput" placeholder="Buscar por CUIT..." />
+          <select id="situacionFilter">
+            <option value="">Todas las situaciones</option>
+          </select>
+          <label><input type="checkbox" id="onlyAlertCheck" /> Solo con alertas</label>
+        </div>
+        <div class="table-scroll">
+          <table id="detailTable">
+            <thead>
+              <tr>
+                <th>#</th><th>Entidad</th><th>CUIT/CUIL/CDI</th><th>Fecha</th><th>Situacion</th>
+                <th class="num">Prestamos (miles $)</th><th class="num">Dias atraso</th>
+                <th>Proceso judicial</th><th>Refinanciacion</th><th>Alerta</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span id="pagerInfo"></span>
+          <div>
+            <button class="btn secondary" id="prevPage" type="button">&larr; Anterior</button>
+            <button class="btn secondary" id="nextPage" type="button">Siguiente &rarr;</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="downloadXlsx" type="button">Descargar Excel (.xlsx)</button>
+        <button class="btn secondary" id="downloadCsv" type="button">Descargar CSV</button>
+      </div>
+    </div>
+
+    <footer class="note">
+      Situacion: 1 Normal · 2 Riesgo bajo/seguimiento especial · 3 Riesgo medio/con problemas ·
+      4 Riesgo alto/insolvencia · 5 Irrecuperable · 11 Cubierto en su totalidad con garantia preferida A.
+      Los montos del archivo original estan expresados en miles de pesos con un decimal.
+      Una fila se marca como "alerta" si su situacion es 3, 4 o 5, si tiene dias de atraso &gt; 0,
+      si esta en proceso judicial/revision, o si tiene refinanciacion o recategorizacion obligatoria.
+    </footer>
+  </div>
+
+<script>
+/* ============== logica de parseo (igual a parse_deudores.py) ============== */
+const FIELD_LAYOUT = [
+  ["cod_entidad", 5], ["fecha_info", 6], ["tipo_id", 2], ["nro_id", 11], ["actividad", 3],
+  ["situacion", 2], ["prestamos", 12], ["sin_uso", 12], ["garantias_otorgadas", 12],
+  ["otros_conceptos", 12], ["garantias_pref_a", 12], ["garantias_pref_b", 12],
+  ["sin_garantias_pref", 12], ["contragarantias_pref_a", 12], ["contragarantias_pref_b", 12],
+  ["sin_contragarantias_pref", 12], ["previsiones", 12], ["deuda_cubierta", 1],
+  ["proceso_judicial", 1], ["refinanciaciones", 1], ["recategorizacion", 1],
+  ["situacion_juridica", 1], ["irrecuperable", 1], ["dias_atraso", 4],
+];
+const RECORD_LEN = FIELD_LAYOUT.reduce((a, [, w]) => a + w, 0);
+
+const SITUACION_MAP = {
+  1: "1 - Normal", 2: "2 - Riesgo bajo / seguimiento especial",
+  3: "3 - Riesgo medio / con problemas", 4: "4 - Riesgo alto / alto riesgo de insolvencia",
+  5: "5 - Irrecuperable", 11: "11 - Cubierto en su totalidad con garantia preferida A",
+};
+const PROC_JUDICIAL_MAP = { 0: "No observado", 1: "Proceso judicial", 2: "En revision" };
+const SI_NO_9_MAP = { 0: "No", 1: "Si", 9: "No aplicable" };
+const SI_NO_MAP = { 0: "No", 1: "Si" };
+const DEUDA_CUBIERTA_MAP = {
+  0: "No cubierta totalmente por garantias preferidas A",
+  1: "Cubierta totalmente por garantias preferidas A (no clasificable)",
+};
+const TIPO_ID_MAP = { 11: "CUIT/CUIL/CDI" };
+
+function toInt(raw, def = null) {
+  const t = raw.trim();
+  if (!t) return def;
+  const n = parseInt(t, 10);
+  return Number.isNaN(n) ? def : n;
+}
+function toMoney(raw) {
+  const t = raw.trim();
+  if (!t) return 0;
+  const n = parseFloat(t.replace(",", "."));
+  return Number.isNaN(n) ? 0 : n;
+}
+function formatCuit(raw) {
+  const t = raw.trim();
+  if (t.length === 11 && /^\d+$/.test(t)) return `${t.slice(0,2)}-${t.slice(2,10)}-${t.slice(10,11)}`;
+  return t;
+}
+function formatFecha(raw) {
+  const t = raw.trim();
+  if (t.length === 6 && /^\d+$/.test(t)) return `${t.slice(0,4)}-${t.slice(4,6)}`;
+  return t;
+}
+function stripLinePrefix(line) {
+  const m = line.match(/^\s*\d+\t(.*)$/);
+  return m ? m[1] : line;
+}
+function parseLine(rawLine, lineNo) {
+  let line = stripLinePrefix(rawLine.replace(/\r$/, ""));
+  if (!line.trim()) return null;
+  const padded = line.length >= RECORD_LEN ? line.slice(0, RECORD_LEN) : line.padEnd(RECORD_LEN, " ");
+  const f = {}; let pos = 0;
+  for (const [name, width] of FIELD_LAYOUT) { f[name] = padded.slice(pos, pos + width); pos += width; }
+
+  const situacionCod = toInt(f.situacion);
+  const procJudicialCod = toInt(f.proceso_judicial);
+  const refinanciacionesCod = toInt(f.refinanciaciones);
+  const recategorizacionCod = toInt(f.recategorizacion);
+  const situacionJuridicaCod = toInt(f.situacion_juridica);
+  const irrecuperableCod = toInt(f.irrecuperable);
+  const deudaCubiertaCod = toInt(f.deuda_cubierta);
+  const diasAtraso = toInt(f.dias_atraso, 0) || 0;
+  const tipoIdCod = toInt(f.tipo_id);
+  const prestamos = toMoney(f.prestamos);
+
+  const alerta = (situacionCod !== null && situacionCod >= 3 && situacionCod !== 11) ||
+    diasAtraso > 0 || procJudicialCod === 1 || procJudicialCod === 2 ||
+    refinanciacionesCod === 1 || recategorizacionCod === 1;
+
+  return {
+    nroRegistro: lineNo, codEntidad: f.cod_entidad.trim(), fechaInfo: formatFecha(f.fecha_info),
+    tipoIdCod, tipoId: TIPO_ID_MAP[tipoIdCod] || String(tipoIdCod), cuit: formatCuit(f.nro_id),
+    actividad: f.actividad.trim(), situacionCod, situacion: SITUACION_MAP[situacionCod] || `Cod. ${situacionCod}`,
+    prestamos, garantiasOtorgadas: toMoney(f.garantias_otorgadas), otrosConceptos: toMoney(f.otros_conceptos),
+    garantiasPrefA: toMoney(f.garantias_pref_a), garantiasPrefB: toMoney(f.garantias_pref_b),
+    sinGarantiasPref: toMoney(f.sin_garantias_pref), contragarantiasPrefA: toMoney(f.contragarantias_pref_a),
+    contragarantiasPrefB: toMoney(f.contragarantias_pref_b), sinContragarantiasPref: toMoney(f.sin_contragarantias_pref),
+    previsiones: toMoney(f.previsiones), deudaCubierta: DEUDA_CUBIERTA_MAP[deudaCubiertaCod] ?? String(deudaCubiertaCod),
+    procesoJudicial: PROC_JUDICIAL_MAP[procJudicialCod] ?? String(procJudicialCod),
+    refinanciaciones: SI_NO_9_MAP[refinanciacionesCod] ?? String(refinanciacionesCod),
+    recategorizacion: SI_NO_MAP[recategorizacionCod] ?? String(recategorizacionCod),
+    situacionJuridica: SI_NO_9_MAP[situacionJuridicaCod] ?? String(situacionJuridicaCod),
+    irrecuperable: SI_NO_9_MAP[irrecuperableCod] ?? String(irrecuperableCod),
+    diasAtraso, alerta,
+  };
+}
+function parseText(text) {
+  const lines = text.split("\n");
+  const rows = []; let ln = 0;
+  for (const raw of lines) { ln += 1; const row = parseLine(raw, ln); if (row) rows.push(row); }
+  return rows;
+}
+function summarize(rows) {
+  const categorias = [1, 2, 3, 4, 5, 11];
+  const totalPrestamos = rows.reduce((a, r) => a + r.prestamos, 0);
+  const resumen = categorias.map((cod) => {
+    const subset = rows.filter((r) => r.situacionCod === cod);
+    const monto = subset.reduce((a, r) => a + r.prestamos, 0);
+    return { cod, situacion: SITUACION_MAP[cod], cantidad: subset.length, monto,
+      pctCantidad: rows.length ? subset.length / rows.length : 0,
+      pctMonto: totalPrestamos ? monto / totalPrestamos : 0 };
+  });
+  const conocidos = resumen.reduce((a, r) => a + r.cantidad, 0);
+  const montoConocidos = resumen.reduce((a, r) => a + r.monto, 0);
+  const otras = { cod: "otras", situacion: "Otras / no informado",
+    cantidad: rows.length - conocidos, monto: totalPrestamos - montoConocidos,
+    pctCantidad: rows.length ? (rows.length - conocidos) / rows.length : 0,
+    pctMonto: totalPrestamos ? (totalPrestamos - montoConocidos) / totalPrestamos : 0 };
+  return { resumen, otras, totalRegistros: rows.length, totalPrestamos,
+    totalAlertas: rows.filter((r) => r.alerta).length };
+}
+
+/* ============== estado de la app ============== */
+let allRows = [];
+let filteredRows = [];
+let currentPage = 0;
+const PAGE_SIZE = 200;
+
+const tierColorVar = (cod) => {
+  if (cod === 1) return "var(--tier-1)";
+  if (cod === 2) return "var(--tier-2)";
+  if (cod === 3) return "var(--tier-3)";
+  if (cod === 4) return "var(--tier-4)";
+  if (cod === 5) return "var(--tier-5)";
+  if (cod === 11) return "var(--tier-11)";
+  return "var(--tier-otras)";
+};
+
+function fmtInt(n) { return new Intl.NumberFormat("es-AR").format(Math.round(n)); }
+function fmtMiles(n) { return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(n); }
+function fmtPesos(n) { return "$" + new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n * 1000); }
+function fmtPct(n) { return (n * 100).toFixed(1) + "%"; }
+
+function setStatus(msg, isError) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = isError ? "error" : "";
+}
+
+function processText(text) {
+  const rows = parseText(text);
+  if (!rows.length) {
+    setStatus("No se encontraron registros validos en el contenido provisto.", true);
+    return;
+  }
+  allRows = rows;
+  currentPage = 0;
+  setStatus(`Se procesaron ${rows.length.toLocaleString("es-AR")} registros correctamente.`);
+  render();
+  document.getElementById("results").style.display = "block";
+}
+
+function render() {
+  const s = summarize(allRows);
+  document.getElementById("statTotal").textContent = fmtInt(s.totalRegistros);
+  document.getElementById("statMonto").textContent = fmtPesos(s.totalPrestamos);
+  document.getElementById("statAlertas").textContent = fmtInt(s.totalAlertas) + " (" + fmtPct(s.totalAlertas / s.totalRegistros) + ")";
+  const entidades = new Set(allRows.map((r) => r.codEntidad));
+  document.getElementById("statEntidades").textContent = fmtInt(entidades.size);
+
+  renderBarChart(s);
+  renderSummaryTable(s);
+  populateSituacionFilter(s);
+  applyFilters();
+}
+
+function renderBarChart(s) {
+  const cats = s.resumen.filter((r) => r.cod !== 11).concat(s.otras.cantidad > 0 ? [s.otras] : []);
+  const maxCantidad = Math.max(1, ...cats.map((c) => c.cantidad));
+  const container = document.getElementById("barChart");
+  container.innerHTML = "";
+  cats.forEach((c) => {
+    const pct = (c.cantidad / maxCantidad) * 100;
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label">${c.situacion}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%; background:${tierColorVar(c.cod)}"></div>
+        <div class="bar-tooltip">${fmtInt(c.cantidad)} deudores &middot; ${fmtMiles(c.monto)} miles $ &middot; ${fmtPct(c.pctMonto)} del monto</div>
+      </div>
+      <div class="bar-value">${fmtInt(c.cantidad)} (${fmtPct(c.pctCantidad)})</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function renderSummaryTable(s) {
+  const tbody = document.querySelector("#summaryTable tbody");
+  tbody.innerHTML = "";
+  const rows = [...s.resumen, s.otras];
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="tier-dot"><span class="dot" style="background:${tierColorVar(r.cod)}"></span></td>
+      <td>${r.situacion}</td>
+      <td class="num">${fmtInt(r.cantidad)}</td>
+      <td class="num">${fmtPct(r.pctCantidad)}</td>
+      <td class="num">${fmtMiles(r.monto)}</td>
+      <td class="num">${fmtPct(r.pctMonto)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function populateSituacionFilter(s) {
+  const sel = document.getElementById("situacionFilter");
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todas las situaciones</option>';
+  [...s.resumen].filter((r) => r.cantidad > 0).forEach((r) => {
+    const opt = document.createElement("option");
+    opt.value = r.cod;
+    opt.textContent = `${r.situacion} (${r.cantidad})`;
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+}
+
+function applyFilters() {
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const sit = document.getElementById("situacionFilter").value;
+  const onlyAlert = document.getElementById("onlyAlertCheck").checked;
+
+  filteredRows = allRows.filter((r) => {
+    if (q && !r.cuit.toLowerCase().includes(q)) return false;
+    if (sit && String(r.situacionCod) !== sit) return false;
+    if (onlyAlert && !r.alerta) return false;
+    return true;
+  });
+  currentPage = 0;
+  renderDetailTable();
+}
+
+function renderDetailTable() {
+  const tbody = document.querySelector("#detailTable tbody");
+  tbody.innerHTML = "";
+  const start = currentPage * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+
+  pageRows.forEach((r) => {
+    const tr = document.createElement("tr");
+    if (r.alerta) tr.className = "alerta-row";
+    tr.innerHTML = `
+      <td>${r.nroRegistro}</td>
+      <td>${r.codEntidad}</td>
+      <td>${r.cuit}</td>
+      <td>${r.fechaInfo}</td>
+      <td><span class="dot" style="background:${tierColorVar(r.situacionCod)}"></span>${r.situacion}</td>
+      <td class="num">${fmtMiles(r.prestamos)}</td>
+      <td class="num">${r.diasAtraso}</td>
+      <td>${r.procesoJudicial}</td>
+      <td>${r.refinanciaciones}</td>
+      <td>${r.alerta ? '<span class="badge si">Si</span>' : '<span class="badge no">No</span>'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  document.getElementById("pagerInfo").textContent =
+    filteredRows.length === 0
+      ? "Sin resultados para el filtro actual."
+      : `Mostrando ${start + 1}-${Math.min(start + PAGE_SIZE, filteredRows.length)} de ${filteredRows.length.toLocaleString("es-AR")} (pagina ${currentPage + 1} de ${totalPages})`;
+  document.getElementById("prevPage").disabled = currentPage === 0;
+  document.getElementById("nextPage").disabled = currentPage >= totalPages - 1;
+}
+
+/* ============== eventos de UI ============== */
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+
+dropzone.addEventListener("click", () => fileInput.click());
+["dragenter", "dragover"].forEach((evt) =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); })
+);
+["dragleave", "drop"].forEach((evt) =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); })
+);
+dropzone.addEventListener("drop", (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+fileInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) readFile(file);
+});
+
+function readFile(file) {
+  setStatus(`Leyendo ${file.name}...`);
+  const reader = new FileReader();
+  reader.onload = (e) => processText(e.target.result);
+  reader.onerror = () => setStatus("No se pudo leer el archivo.", true);
+  reader.readAsText(file, "utf-8");
+}
+
+document.getElementById("parseBtn").addEventListener("click", () => {
+  const text = document.getElementById("pasteArea").value;
+  if (!text.trim()) { setStatus("Pegue contenido o cargue un archivo primero.", true); return; }
+  processText(text);
+});
+document.getElementById("clearBtn").addEventListener("click", () => {
+  document.getElementById("pasteArea").value = "";
+  document.getElementById("results").style.display = "none";
+  allRows = []; filteredRows = [];
+  setStatus("");
+  fileInput.value = "";
+});
+
+document.getElementById("searchInput").addEventListener("input", applyFilters);
+document.getElementById("situacionFilter").addEventListener("change", applyFilters);
+document.getElementById("onlyAlertCheck").addEventListener("change", applyFilters);
+document.getElementById("prevPage").addEventListener("click", () => { if (currentPage > 0) { currentPage--; renderDetailTable(); } });
+document.getElementById("nextPage").addEventListener("click", () => {
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  if (currentPage < totalPages - 1) { currentPage++; renderDetailTable(); }
+});
+
+const themeToggle = document.getElementById("themeToggle");
+themeToggle.addEventListener("click", () => {
+  const root = document.documentElement;
+  const current = root.getAttribute("data-theme");
+  if (current === "dark") { root.setAttribute("data-theme", "light"); themeToggle.textContent = "Modo oscuro"; }
+  else { root.setAttribute("data-theme", "dark"); themeToggle.textContent = "Modo claro"; }
+});
+
+/* ============== exportacion ============== */
+function rowsToExportObjects(rows) {
+  return rows.map((r) => ({
+    "Nro registro": r.nroRegistro, "Codigo entidad": r.codEntidad, "Fecha informacion": r.fechaInfo,
+    "Tipo identificacion": r.tipoId, "CUIT/CUIL/CDI": r.cuit, "Actividad (cod)": r.actividad,
+    "Situacion": r.situacion, "Prestamos y otros creditos (miles $)": r.prestamos,
+    "Garantias otorgadas (miles $)": r.garantiasOtorgadas, "Otros conceptos (miles $)": r.otrosConceptos,
+    "Garantias preferidas A (miles $)": r.garantiasPrefA, "Garantias preferidas B (miles $)": r.garantiasPrefB,
+    "Sin garantias preferidas (miles $)": r.sinGarantiasPref,
+    "Contragarantias preferidas A (miles $)": r.contragarantiasPrefA,
+    "Contragarantias preferidas B (miles $)": r.contragarantiasPrefB,
+    "Sin contragarantias preferidas (miles $)": r.sinContragarantiasPref,
+    "Previsiones (miles $)": r.previsiones, "Deuda cubierta": r.deudaCubierta,
+    "Proceso judicial/Revision": r.procesoJudicial, "Refinanciaciones": r.refinanciaciones,
+    "Recategorizacion obligatoria": r.recategorizacion, "Situacion juridica": r.situacionJuridica,
+    "Irrecuperable": r.irrecuperable, "Dias de atraso": r.diasAtraso, "Alerta": r.alerta ? "Si" : "No",
+  }));
+}
+
+document.getElementById("downloadXlsx").addEventListener("click", () => {
+  if (!allRows.length) return;
+  const wb = XLSX.utils.book_new();
+  const wsDetalle = XLSX.utils.json_to_sheet(rowsToExportObjects(allRows));
+  XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
+
+  const s = summarize(allRows);
+  const resumenObjs = [...s.resumen, s.otras].map((r) => ({
+    "Situacion": r.situacion, "Cantidad de deudores": r.cantidad,
+    "Monto prestamos (miles $)": r.monto, "% de deudores": (r.pctCantidad * 100).toFixed(1) + "%",
+    "% del monto": (r.pctMonto * 100).toFixed(1) + "%",
+  }));
+  const wsResumen = XLSX.utils.json_to_sheet(resumenObjs);
+  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen_Situacion");
+
+  const alertasObjs = rowsToExportObjects(allRows.filter((r) => r.alerta));
+  const wsAlertas = XLSX.utils.json_to_sheet(alertasObjs);
+  XLSX.utils.book_append_sheet(wb, wsAlertas, "Alertas");
+
+  XLSX.writeFile(wb, "deudores_parseado.xlsx");
+});
+
+document.getElementById("downloadCsv").addEventListener("click", () => {
+  if (!allRows.length) return;
+  const objs = rowsToExportObjects(allRows);
+  const headers = Object.keys(objs[0]);
+  const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [headers.map(escape).join(",")].concat(
+    objs.map((o) => headers.map((h) => escape(o[h])).join(","))
+  );
+  const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "deudores_parseado.csv"; a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
