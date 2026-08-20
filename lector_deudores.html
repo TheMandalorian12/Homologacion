@@ -126,7 +126,15 @@
   }
   .btn:hover { opacity: 0.92; }
   .btn.secondary { background: var(--surface-1); color: var(--text-primary); }
+  .btn.small { padding: 5px 10px; font-size: 0.78rem; }
   .btn-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+
+  #bcraOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+  #bcraPanel { background: var(--surface-1); border-radius: 14px; width: min(520px, 92vw); border: 1px solid var(--card-border); }
+  #bcraPanel header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--gridline); }
+  #bcraPanel header h3 { margin: 0; font-size: 1rem; }
+  #bcraPanel .body { padding: 14px 18px; }
+  .close-x { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-secondary); }
 
   #status { font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px; min-height: 18px; }
   #status.error { color: var(--status-critical); }
@@ -262,9 +270,10 @@
           <table id="detailTable">
             <thead>
               <tr>
-                <th>#</th><th>Entidad</th><th>CUIT/CUIL/CDI</th><th>Fecha</th><th>Situacion</th>
-                <th class="num">Prestamos (miles $)</th><th class="num">Dias atraso</th>
+                <th>#</th><th>CUIT/CUIL/CDI</th><th>Fecha</th><th>Situacion</th>
+                <th class="num">Prestamos (miles $)</th><th>BCRA</th>
                 <th>Proceso judicial</th><th>Refinanciacion</th><th>Alerta</th>
+                <th class="num">Dias atraso</th><th>Entidad</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -292,6 +301,26 @@
       Una fila se marca como "alerta" si su situacion es 3, 4 o 5, si tiene dias de atraso &gt; 0,
       si esta en proceso judicial/revision, o si tiene refinanciacion o recategorizacion obligatoria.
     </footer>
+  </div>
+
+  <div id="bcraOverlay">
+    <div id="bcraPanel">
+      <header>
+        <h3 id="bcraPanelTitle">Consulta BCRA</h3>
+        <button class="close-x" id="bcraClose" type="button">&times;</button>
+      </header>
+      <div class="body">
+        <p id="bcraCuitBig" style="font-size:1.3rem;font-weight:700;letter-spacing:0.04em;margin:4px 0 12px;"></p>
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 14px;line-height:1.5;">
+          La consulta oficial del BCRA no admite pre-cargar el CUIT/CUIL por URL, así que no se puede
+          incrustar acá adentro. Copiá el número y pegalo en la página oficial que se abre con el botón de abajo.
+        </p>
+        <div class="btn-row">
+          <button class="btn secondary" id="bcraCopyCuit" type="button">Copiar CUIT/CUIL</button>
+          <button class="btn secondary" id="bcraOpenTab" type="button">Abrir consulta BCRA en pestaña nueva ↗</button>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -372,6 +401,7 @@ function parseLine(rawLine, lineNo) {
   return {
     nroRegistro: lineNo, codEntidad: f.cod_entidad.trim(), fechaInfo: formatFecha(f.fecha_info),
     tipoIdCod, tipoId: TIPO_ID_MAP[tipoIdCod] || String(tipoIdCod), cuit: formatCuit(f.nro_id),
+    cuitDigits: f.nro_id.trim(),
     actividad: f.actividad.trim(), situacionCod, situacion: SITUACION_MAP[situacionCod] || `Cod. ${situacionCod}`,
     prestamos, garantiasOtorgadas: toMoney(f.garantias_otorgadas), otrosConceptos: toMoney(f.otros_conceptos),
     garantiasPrefA: toMoney(f.garantias_pref_a), garantiasPrefB: toMoney(f.garantias_pref_b),
@@ -544,18 +574,22 @@ function renderDetailTable() {
     if (r.alerta) tr.className = "alerta-row";
     tr.innerHTML = `
       <td>${r.nroRegistro}</td>
-      <td>${r.codEntidad}</td>
       <td>${r.cuit}</td>
       <td>${r.fechaInfo}</td>
       <td><span class="dot" style="background:${tierColorVar(r.situacionCod)}"></span>${r.situacion}</td>
       <td class="num">${fmtMiles(r.prestamos)}</td>
-      <td class="num">${r.diasAtraso}</td>
+      <td><button class="btn secondary small consultar-btn" type="button" data-cuit="${r.cuit}" data-digits="${r.cuitDigits}">Consultar</button></td>
       <td>${r.procesoJudicial}</td>
       <td>${r.refinanciaciones}</td>
       <td>${r.alerta ? '<span class="badge si">Si</span>' : '<span class="badge no">No</span>'}</td>
+      <td class="num">${r.diasAtraso}</td>
+      <td>${r.codEntidad}</td>
     `;
     tbody.appendChild(tr);
   });
+  document.querySelectorAll(".consultar-btn").forEach((el) =>
+    el.addEventListener("click", () => openBcraPanel(el.dataset.cuit, el.dataset.digits))
+  );
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   document.getElementById("pagerInfo").textContent =
@@ -606,6 +640,23 @@ document.getElementById("clearBtn").addEventListener("click", () => {
   setStatus("");
   fileInput.value = "";
 });
+
+/* ============== panel de consulta BCRA (copiar CUIT + abrir consulta oficial) ============== */
+function openBcraPanel(cuit, digits) {
+  document.getElementById("bcraPanelTitle").textContent = `Consulta BCRA — ${cuit}`;
+  document.getElementById("bcraCuitBig").textContent = digits;
+  document.getElementById("bcraOpenTab").onclick = () =>
+    window.open("https://www.bcra.gob.ar/situacion-crediticia/", "_blank", "noopener");
+  document.getElementById("bcraCopyCuit").onclick = () => {
+    navigator.clipboard?.writeText(digits);
+    document.getElementById("bcraCopyCuit").textContent = "¡Copiado!";
+    setTimeout(() => { document.getElementById("bcraCopyCuit").textContent = "Copiar CUIT/CUIL"; }, 1500);
+  };
+  document.getElementById("bcraOverlay").style.display = "flex";
+}
+function closeBcraPanel() { document.getElementById("bcraOverlay").style.display = "none"; }
+document.getElementById("bcraClose").addEventListener("click", closeBcraPanel);
+document.getElementById("bcraOverlay").addEventListener("click", (e) => { if (e.target.id === "bcraOverlay") closeBcraPanel(); });
 
 document.getElementById("searchInput").addEventListener("input", applyFilters);
 document.getElementById("situacionFilter").addEventListener("change", applyFilters);
