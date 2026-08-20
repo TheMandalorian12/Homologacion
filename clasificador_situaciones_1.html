@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clasificador de Situaciones 1-4 (BCRA + criterios internos)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --card-border:    #e1e0d9;
+    --accent:         #2a78d6;
+
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-serious:  #ec835a;
+    --status-critical: #d03b3b;
+    --status-pending:  #898781;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --page-plane: #0d0d0d; --text-primary: #ffffff;
+      --text-secondary: #c3c2b7; --text-muted: #898781; --gridline: #2c2c2a;
+      --baseline: #383835; --border: rgba(255,255,255,0.10); --card-border: #2c2c2a;
+      --accent: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page-plane: #0d0d0d; --text-primary: #ffffff;
+    --text-secondary: #c3c2b7; --text-muted: #898781; --gridline: #2c2c2a;
+    --baseline: #383835; --border: rgba(255,255,255,0.10); --card-border: #2c2c2a;
+    --accent: #3987e5;
+  }
+
+  * { box-sizing: border-box; }
+  body.viz-root {
+    margin: 0; min-height: 100vh;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane); color: var(--text-primary);
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header.app-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  header.app-header h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  header.app-header p { margin: 0; color: var(--text-secondary); max-width: 760px; font-size: 0.9rem; line-height: 1.5; }
+  .theme-toggle { border: 1px solid var(--card-border); background: var(--surface-1); color: var(--text-primary); border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+
+  .card { background: var(--surface-1); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; }
+  .notice { background: color-mix(in srgb, var(--status-warning) 12%, transparent); border: 1px solid color-mix(in srgb, var(--status-warning) 35%, transparent); border-radius: 10px; padding: 12px 16px; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.5; }
+  .notice strong { color: var(--text-primary); }
+
+  #dropzone { border: 2px dashed var(--baseline); border-radius: 12px; padding: 26px 20px; text-align: center; background: var(--surface-1); cursor: pointer; }
+  #dropzone.dragover { border-color: var(--accent); }
+  #dropzone p { margin: 4px 0; color: var(--text-secondary); font-size: 0.9rem; }
+  #fileInput { display: none; }
+  .btn { border: 1px solid var(--card-border); background: var(--accent); color: #fff; border-radius: 8px; padding: 9px 16px; font-size: 0.85rem; cursor: pointer; font-weight: 600; }
+  .btn.secondary { background: var(--surface-1); color: var(--text-primary); }
+  .btn.small { padding: 5px 10px; font-size: 0.78rem; }
+  .btn-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  #status { font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px; min-height: 18px; }
+
+  #results { display: none; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 16px; }
+  .stat-tile .label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+  .stat-tile .value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat-tile.good .value { color: var(--status-good); }
+  .stat-tile.warning .value { color: var(--status-warning); }
+  .stat-tile.serious .value { color: var(--status-serious); }
+  .stat-tile.critical .value { color: var(--status-critical); }
+  .stat-tile.pending .value { color: var(--status-pending); }
+
+  h2.section-title { font-size: 1rem; margin: 0 0 12px; }
+
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .filters input[type="text"], .filters select { border: 1px solid var(--card-border); border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; background: var(--surface-1); color: var(--text-primary); }
+
+  .table-scroll { max-height: 640px; overflow: auto; border: 1px solid var(--card-border); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--gridline); white-space: nowrap; }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .02em; position: sticky; top: 0; background: var(--surface-1); z-index: 2; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.sticky-col, th.sticky-col { position: sticky; left: 0; background: var(--surface-1); z-index: 1; }
+
+  input.cell-input, select.cell-input { width: 100%; min-width: 70px; border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 6px; font-size: 0.8rem; background: var(--page-plane); color: var(--text-primary); }
+  input.cell-input[type="checkbox"] { width: auto; min-width: 0; }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; padding: 3px 9px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .badge.good { background: color-mix(in srgb, var(--status-good) 18%, transparent); color: var(--status-good); }
+  .badge.good::before { background: var(--status-good); }
+  .badge.warning { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: color-mix(in srgb, var(--status-warning) 70%, var(--text-primary)); }
+  .badge.warning::before { background: var(--status-warning); }
+  .badge.serious { background: color-mix(in srgb, var(--status-serious) 20%, transparent); color: var(--status-serious); }
+  .badge.serious::before { background: var(--status-serious); }
+  .badge.critical { background: color-mix(in srgb, var(--status-critical) 18%, transparent); color: var(--status-critical); }
+  .badge.critical::before { background: var(--status-critical); }
+  .badge.pending { background: color-mix(in srgb, var(--status-pending) 20%, transparent); color: var(--text-secondary); }
+  .badge.pending::before { background: var(--status-pending); }
+
+  .motivo-list { font-size: 0.76rem; color: var(--text-secondary); white-space: normal; max-width: 260px; }
+
+  /* panel de consulta BCRA */
+  #bcraOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+  #bcraPanel { background: var(--surface-1); border-radius: 14px; width: min(720px, 92vw); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--card-border); }
+  #bcraPanel header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--gridline); }
+  #bcraPanel header h3 { margin: 0; font-size: 1rem; }
+  #bcraPanel .body { padding: 14px 18px; overflow-y: auto; }
+  #bcraIframeWrap { border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; height: 380px; margin-bottom: 10px; background: var(--page-plane); }
+  #bcraIframeWrap iframe { width: 100%; height: 100%; border: 0; }
+  #bcraFallbackNote { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 10px; }
+  .close-x { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-secondary); }
+  .toggle-row { display: flex; align-items: center; gap: 10px; margin: 14px 0; }
+  .toggle-row label { font-size: 0.88rem; }
+
+  footer.note { color: var(--text-muted); font-size: 0.76rem; margin-top: 24px; line-height: 1.6; }
+</style>
+</head>
+<body class="viz-root">
+  <div class="wrap">
+    <header class="app-header">
+      <div>
+        <h1>Clasificador de Situaciones 1-4</h1>
+        <p>Combina la situación BCRA del archivo <code>deudores.txt</code> con los indicadores internos
+        (cheques rechazados, relación cuota/ingreso, monto de alquiler, avalistas) para clasificar cada
+        CUIT en Situación 1 (Aprobado), 2 (Con aval), 3 (Asistido) o 4 (Rechazo).</p>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button">Modo oscuro</button>
+    </header>
+
+    <div class="card">
+      <div id="dropzone">
+        <p><strong>Arrastre el archivo deudores.txt aquí</strong> o haga clic para elegirlo.</p>
+        <p>— o pegue el contenido crudo abajo —</p>
+      </div>
+      <input type="file" id="fileInput" accept=".txt,.csv,text/plain" />
+      <textarea id="pasteArea" placeholder="Pegue aquí las líneas del archivo de deudores..." style="width:100%;min-height:80px;margin-top:10px;font-family:ui-monospace,monospace;font-size:0.78rem;border:1px solid var(--card-border);border-radius:8px;padding:10px;background:var(--surface-1);color:var(--text-primary);"></textarea>
+      <div class="btn-row">
+        <button class="btn" id="parseBtn" type="button">Procesar</button>
+        <button class="btn secondary" id="clearBtn" type="button">Limpiar</button>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div id="results">
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="label">CUITs evaluados</div><div class="value" id="statTotal">0</div></div>
+        <div class="stat-tile good"><div class="label">Situación 1 · Aprobado</div><div class="value" id="statS1">0</div></div>
+        <div class="stat-tile warning"><div class="label">Situación 2 · Con aval</div><div class="value" id="statS2">0</div></div>
+        <div class="stat-tile serious"><div class="label">Situación 3 · Asistido</div><div class="value" id="statS3">0</div></div>
+        <div class="stat-tile critical"><div class="label">Situación 4 · Rechazo</div><div class="value" id="statS4">0</div></div>
+        <div class="stat-tile pending"><div class="label">Pendiente de datos</div><div class="value" id="statPend">0</div></div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Deudores</h2>
+        <div class="filters">
+          <input type="text" id="searchInput" placeholder="Buscar por CUIT..." />
+          <select id="claseFilter">
+            <option value="">Todas las clasificaciones</option>
+            <option value="1">Situación 1 · Aprobado</option>
+            <option value="2">Situación 2 · Con aval</option>
+            <option value="3">Situación 3 · Asistido</option>
+            <option value="4">Situación 4 · Rechazo</option>
+            <option value="pending">Pendiente</option>
+          </select>
+        </div>
+        <div class="table-scroll">
+          <table id="mainTable">
+            <thead>
+              <tr>
+                <th class="sticky-col">CUIT</th>
+                <th>Entidades</th>
+                <th>Situación BCRA</th>
+                <th class="num">Deuda total (miles $)</th>
+                <th class="num">% deuda sit. 3/4</th>
+                <th>Cheques rechazados</th>
+                <th>Canal</th>
+                <th>Cuota/Ingreso %</th>
+                <th>Alquiler solicitado $</th>
+                <th>Avalistas</th>
+                <th>Cuota/Ingreso c/aval %</th>
+                <th>Clasificación</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="downloadXlsx" type="button">Descargar Excel (.xlsx)</button>
+        <button class="btn secondary" id="downloadCsv" type="button">Descargar CSV</button>
+        <button class="btn secondary" id="downloadTemplate" type="button">Descargar plantilla de datos manuales (CSV)</button>
+        <label class="btn secondary" style="cursor:pointer;">
+          Cargar datos manuales (CSV)
+          <input type="file" id="importManualCsv" accept=".csv" style="display:none;" />
+        </label>
+      </div>
+    </div>
+
+    <footer class="note">
+      Reglas aplicadas — Rechazo (Situación 4) si se cumple cualquiera de: situación BCRA vigente distinta de 1/2/11,
+      cheques rechazados = Sí, deuda en situación 3 o 4 &gt; 20% del total, o situación BCRA = 5.
+      Si no hay rechazo: alquiler solicitado &gt; $6.500.000 (tope con ajuste del 30% sobre $5.000.000) &rarr; Situación 3 (Asistido).
+      Si no, según canal (Open Market 20% / Comercial 25%): cuota/ingreso dentro del umbral &rarr; Situación 1 (Aprobado);
+      por encima del umbral &rarr; Situación 2 (requiere hasta 2 avalistas, ingresos sumados).
+      La situación BCRA usada es la del último período informado en el archivo cargado (no 24 meses).
+    </footer>
+  </div>
+
+  <div id="bcraOverlay">
+    <div id="bcraPanel">
+      <header>
+        <h3 id="bcraPanelTitle">Consulta BCRA</h3>
+        <button class="close-x" id="bcraClose" type="button">&times;</button>
+      </header>
+      <div class="body">
+        <p id="bcraCuitBig" style="font-size:1.3rem;font-weight:700;letter-spacing:0.04em;margin:4px 0 4px;"></p>
+        <p id="bcraFallbackNote" style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 14px;line-height:1.5;">
+          La consulta oficial del BCRA no admite pre-cargar el CUIT/CUIL por URL (genera su propio token de
+          sesión al abrirse), así que no se puede incrustar completa acá adentro. Copiá el número y pegalo
+          en la página oficial que se abre con el botón de abajo.
+        </p>
+        <div class="btn-row">
+          <button class="btn secondary" id="bcraCopyCuit" type="button">Copiar CUIT/CUIL</button>
+          <button class="btn secondary" id="bcraOpenTab" type="button">Abrir consulta BCRA en pestaña nueva ↗</button>
+        </div>
+        <div class="toggle-row">
+          <input type="checkbox" id="bcraChequesCheckbox" />
+          <label for="bcraChequesCheckbox">Tiene cheques rechazados en los últimos 6 meses</label>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="bcraSave" type="button">Guardar y cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ============== parseo BCRA (igual a parse_deudores.py / lector_deudores.html) ============== */
+const FIELD_LAYOUT = [
+  ["cod_entidad", 5], ["fecha_info", 6], ["tipo_id", 2], ["nro_id", 11], ["actividad", 3],
+  ["situacion", 2], ["prestamos", 12], ["sin_uso", 12], ["garantias_otorgadas", 12],
+  ["otros_conceptos", 12], ["garantias_pref_a", 12], ["garantias_pref_b", 12],
+  ["sin_garantias_pref", 12], ["contragarantias_pref_a", 12], ["contragarantias_pref_b", 12],
+  ["sin_contragarantias_pref", 12], ["previsiones", 12], ["deuda_cubierta", 1],
+  ["proceso_judicial", 1], ["refinanciaciones", 1], ["recategorizacion", 1],
+  ["situacion_juridica", 1], ["irrecuperable", 1], ["dias_atraso", 4],
+];
+const RECORD_LEN = FIELD_LAYOUT.reduce((a, [, w]) => a + w, 0);
+
+function toInt(raw, def = null) { const t = raw.trim(); if (!t) return def; const n = parseInt(t, 10); return Number.isNaN(n) ? def : n; }
+function toMoney(raw) { const t = raw.trim(); if (!t) return 0; const n = parseFloat(t.replace(",", ".")); return Number.isNaN(n) ? 0 : n; }
+function formatCuit(raw) { const t = raw.trim(); if (t.length === 11 && /^\d+$/.test(t)) return `${t.slice(0,2)}-${t.slice(2,10)}-${t.slice(10,11)}`; return t; }
+function stripLinePrefix(line) { const m = line.match(/^\s*\d+\t(.*)$/); return m ? m[1] : line; }
+
+function parseLine(rawLine, lineNo) {
+  let line = stripLinePrefix(rawLine.replace(/\r$/, ""));
+  if (!line.trim()) return null;
+  const padded = line.length >= RECORD_LEN ? line.slice(0, RECORD_LEN) : line.padEnd(RECORD_LEN, " ");
+  const f = {}; let pos = 0;
+  for (const [name, width] of FIELD_LAYOUT) { f[name] = padded.slice(pos, pos + width); pos += width; }
+  const situacionCod = toInt(f.situacion);
+  const prestamos = toMoney(f.prestamos);
+  return {
+    nroRegistro: lineNo,
+    codEntidad: f.cod_entidad.trim(),
+    cuit: formatCuit(f.nro_id),
+    cuitDigits: f.nro_id.trim(),
+    situacionCod,
+    prestamos,
+  };
+}
+function parseText(text) {
+  const lines = text.split("\n"); const rows = []; let ln = 0;
+  for (const raw of lines) { ln += 1; const row = parseLine(raw, ln); if (row) rows.push(row); }
+  return rows;
+}
+
+/* ============== agrupación por CUIT ============== */
+function buildGroups(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.cuit)) {
+      map.set(r.cuit, { cuit: r.cuit, cuitDigits: r.cuitDigits, entidades: new Set(), registros: [], deudaTotal: 0, deuda34: 0, tieneSit5: false, situacionesPresentes: new Set() });
+    }
+    const g = map.get(r.cuit);
+    g.entidades.add(r.codEntidad);
+    g.registros.push(r);
+    g.deudaTotal += r.prestamos;
+    if (r.situacionCod === 3 || r.situacionCod === 4) g.deuda34 += r.prestamos;
+    if (r.situacionCod === 5) g.tieneSit5 = true;
+    if (r.situacionCod !== null) g.situacionesPresentes.add(r.situacionCod);
+  }
+  for (const g of map.values()) {
+    const core = [...g.situacionesPresentes].filter((s) => s >= 1 && s <= 5);
+    if (core.length) g.situacionEfectiva = Math.max(...core);
+    else if (g.situacionesPresentes.has(11)) g.situacionEfectiva = 11;
+    else g.situacionEfectiva = null;
+    g.pct34 = g.deudaTotal > 0 ? g.deuda34 / g.deudaTotal : 0;
+  }
+  return map;
+}
+
+const SITUACION_BCRA_LABEL = { 1: "1 - Normal", 2: "2 - Riesgo bajo", 3: "3 - Riesgo medio", 4: "4 - Riesgo alto", 5: "5 - Irrecuperable", 11: "11 - Cubierta (no clasificable)" };
+
+/* ============== estado ============== */
+let groups = new Map();
+let manualData = new Map(); // cuit -> {cheques, canal, cuota, cuotaAval, alquiler, avalistas}
+let sortedCuits = [];
+
+function getManual(cuit) {
+  if (!manualData.has(cuit)) manualData.set(cuit, { cheques: false, canal: "OM", cuota: null, cuotaAval: null, alquiler: null, avalistas: 0 });
+  return manualData.get(cuit);
+}
+
+const ALQUILER_TOPE = 6500000;
+
+function classify(cuit) {
+  const g = groups.get(cuit);
+  const m = getManual(cuit);
+  const motivos = [];
+  if (g.tieneSit5) motivos.push("Situación BCRA 5 (irrecuperable)");
+  if (m.cheques) motivos.push("Cheques rechazados (últimos 6 meses)");
+  if (g.pct34 > 0.20) motivos.push(`Deuda en situación 3/4: ${(g.pct34 * 100).toFixed(1)}% (> 20%)`);
+  const situacionOk = g.situacionEfectiva === 1 || g.situacionEfectiva === 2 || g.situacionEfectiva === 11;
+  if (!situacionOk) motivos.push(`Situación BCRA vigente (${g.situacionEfectiva ?? "sin dato"}) distinta de 1 o 2`);
+
+  if (motivos.length > 0) return { clase: 4, label: "Situación 4 · Rechazo", motivos };
+
+  if (m.alquiler == null) return { clase: null, label: "Pendiente (falta monto de alquiler)", motivos: [] };
+  if (m.alquiler > ALQUILER_TOPE) return { clase: 3, label: "Situación 3 · Asistido (excede tope de alquiler)", motivos: [] };
+
+  const umbral = m.canal === "COM" ? 25 : 20;
+  if (m.cuota == null) return { clase: null, label: "Pendiente (falta relación cuota/ingreso)", motivos: [] };
+  if (m.cuota <= umbral) return { clase: 1, label: "Situación 1 · Aprobado", motivos: [] };
+
+  if (m.avalistas > 0 && m.cuotaAval != null && m.cuotaAval <= umbral) {
+    return { clase: 2, label: "Situación 2 · Aprobado con aval (cumple)", motivos: [] };
+  }
+  return { clase: 2, label: `Situación 2 · Requiere ${m.avalistas > 0 ? "validar" : "hasta 2"} aval(es)`, motivos: [] };
+}
+
+function fmtInt(n) { return new Intl.NumberFormat("es-AR").format(Math.round(n)); }
+function fmtMiles(n) { return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(n); }
+function fmtPct(n) { return (n * 100).toFixed(1) + "%"; }
+function setStatus(msg) { document.getElementById("status").textContent = msg; }
+
+function processText(text) {
+  const rows = parseText(text);
+  if (!rows.length) { setStatus("No se encontraron registros válidos."); return; }
+  groups = buildGroups(rows);
+  manualData = new Map();
+  sortedCuits = [...groups.keys()].sort();
+  setStatus(`Se procesaron ${rows.length.toLocaleString("es-AR")} registros de ${groups.size.toLocaleString("es-AR")} CUITs distintos.`);
+  document.getElementById("results").style.display = "block";
+  renderAll();
+}
+
+function renderAll() {
+  renderStats();
+  renderTable();
+}
+
+function badgeHtml(result) {
+  if (result.clase === 1) return `<span class="badge good">${result.label}</span>`;
+  if (result.clase === 2) return `<span class="badge warning">${result.label}</span>`;
+  if (result.clase === 3) return `<span class="badge serious">${result.label}</span>`;
+  if (result.clase === 4) return `<span class="badge critical">${result.label}</span>`;
+  return `<span class="badge pending">${result.label}</span>`;
+}
+
+function renderStats() {
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0, pending: 0 };
+  for (const cuit of sortedCuits) {
+    const r = classify(cuit);
+    if (r.clase == null) counts.pending++; else counts[r.clase]++;
+  }
+  document.getElementById("statTotal").textContent = fmtInt(sortedCuits.length);
+  document.getElementById("statS1").textContent = fmtInt(counts[1]);
+  document.getElementById("statS2").textContent = fmtInt(counts[2]);
+  document.getElementById("statS3").textContent = fmtInt(counts[3]);
+  document.getElementById("statS4").textContent = fmtInt(counts[4]);
+  document.getElementById("statPend").textContent = fmtInt(counts.pending);
+}
+
+function currentFilteredCuits() {
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const claseFilter = document.getElementById("claseFilter").value;
+  return sortedCuits.filter((cuit) => {
+    if (q && !cuit.toLowerCase().includes(q)) return false;
+    if (claseFilter) {
+      const r = classify(cuit);
+      if (claseFilter === "pending") { if (r.clase != null) return false; }
+      else if (String(r.clase) !== claseFilter) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  const tbody = document.querySelector("#mainTable tbody");
+  tbody.innerHTML = "";
+  const cuits = currentFilteredCuits();
+  for (const cuit of cuits) {
+    const g = groups.get(cuit);
+    const m = getManual(cuit);
+    const result = classify(cuit);
+    const tr = document.createElement("tr");
+    tr.dataset.cuit = cuit;
+    tr.innerHTML = `
+      <td class="sticky-col">${cuit}</td>
+      <td>${[...g.entidades].join(", ")}</td>
+      <td>${SITUACION_BCRA_LABEL[g.situacionEfectiva] ?? "Sin dato"}</td>
+      <td class="num">${fmtMiles(g.deudaTotal)}</td>
+      <td class="num">${fmtPct(g.pct34)}</td>
+      <td>
+        <button class="btn small secondary consultar-btn" type="button" data-cuit="${cuit}" style="margin-bottom:4px;">Consultar BCRA</button><br/>
+        <label style="font-size:0.75rem;"><input type="checkbox" class="cell-input cheques-input" data-cuit="${cuit}" ${m.cheques ? "checked" : ""}/> Sí</label>
+      </td>
+      <td>
+        <select class="cell-input canal-input" data-cuit="${cuit}">
+          <option value="OM" ${m.canal === "OM" ? "selected" : ""}>Open Market</option>
+          <option value="COM" ${m.canal === "COM" ? "selected" : ""}>Comercial</option>
+        </select>
+      </td>
+      <td><input type="number" class="cell-input cuota-input" data-cuit="${cuit}" min="0" step="0.1" value="${m.cuota ?? ""}" placeholder="%"/></td>
+      <td><input type="number" class="cell-input alquiler-input" data-cuit="${cuit}" min="0" step="1000" value="${m.alquiler ?? ""}" placeholder="$"/></td>
+      <td>
+        <select class="cell-input avalistas-input" data-cuit="${cuit}">
+          <option value="0" ${m.avalistas === 0 ? "selected" : ""}>0</option>
+          <option value="1" ${m.avalistas === 1 ? "selected" : ""}>1</option>
+          <option value="2" ${m.avalistas === 2 ? "selected" : ""}>2</option>
+        </select>
+      </td>
+      <td><input type="number" class="cell-input cuotaaval-input" data-cuit="${cuit}" min="0" step="0.1" value="${m.cuotaAval ?? ""}" placeholder="%" ${m.avalistas > 0 ? "" : "disabled"}/></td>
+      <td>${badgeHtml(result)}</td>
+      <td class="motivo-list">${result.motivos.join("; ")}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+  document.querySelectorAll(".cheques-input").forEach((el) => el.addEventListener("change", onManualChange));
+  document.querySelectorAll(".canal-input").forEach((el) => el.addEventListener("change", onManualChange));
+  document.querySelectorAll(".cuota-input").forEach((el) => el.addEventListener("input", onManualChange));
+  document.querySelectorAll(".alquiler-input").forEach((el) => el.addEventListener("input", onManualChange));
+  document.querySelectorAll(".avalistas-input").forEach((el) => el.addEventListener("change", onManualChange));
+  document.querySelectorAll(".cuotaaval-input").forEach((el) => el.addEventListener("input", onManualChange));
+  document.querySelectorAll(".consultar-btn").forEach((el) => el.addEventListener("click", () => openBcraPanel(el.dataset.cuit)));
+}
+
+function onManualChange(e) {
+  const cuit = e.target.dataset.cuit;
+  const m = getManual(cuit);
+  if (e.target.classList.contains("cheques-input")) m.cheques = e.target.checked;
+  if (e.target.classList.contains("canal-input")) m.canal = e.target.value;
+  if (e.target.classList.contains("cuota-input")) m.cuota = e.target.value === "" ? null : parseFloat(e.target.value);
+  if (e.target.classList.contains("alquiler-input")) m.alquiler = e.target.value === "" ? null : parseFloat(e.target.value);
+  if (e.target.classList.contains("avalistas-input")) m.avalistas = parseInt(e.target.value, 10);
+  if (e.target.classList.contains("cuotaaval-input")) m.cuotaAval = e.target.value === "" ? null : parseFloat(e.target.value);
+
+  const tr = e.target.closest("tr");
+  const result = classify(cuit);
+  tr.querySelector("td:nth-last-child(2)").innerHTML = badgeHtml(result);
+  tr.querySelector("td:nth-last-child(1)").textContent = result.motivos.join("; ");
+  const cuotaAvalInput = tr.querySelector(".cuotaaval-input");
+  cuotaAvalInput.disabled = m.avalistas === 0;
+  renderStats();
+}
+
+/* ============== panel de consulta BCRA ==============
+   Nota: la consulta oficial (bcra.gob.ar/deudores) genera su propio token de sesión al
+   abrirse y no acepta el CUIT/CUIL pre-cargado por URL (probado: tira "Error" si se le
+   pasa por query string), así que no se puede ni incrustar ni deep-linkear directamente.
+   Este panel solo ayuda a copiar el número y abrir la página oficial para pegarlo ahí. */
+function openBcraPanel(cuit) {
+  const g = groups.get(cuit);
+  const m = getManual(cuit);
+  document.getElementById("bcraPanelTitle").textContent = `Consulta BCRA — ${cuit}`;
+  document.getElementById("bcraCuitBig").textContent = g.cuitDigits;
+  const landingUrl = "https://www.bcra.gob.ar/situacion-crediticia/";
+  document.getElementById("bcraOpenTab").onclick = () => window.open(landingUrl, "_blank", "noopener");
+  document.getElementById("bcraCopyCuit").onclick = () => {
+    navigator.clipboard?.writeText(g.cuitDigits);
+    document.getElementById("bcraCopyCuit").textContent = "¡Copiado!";
+    setTimeout(() => { document.getElementById("bcraCopyCuit").textContent = "Copiar CUIT/CUIL"; }, 1500);
+  };
+  document.getElementById("bcraChequesCheckbox").checked = !!m.cheques;
+  document.getElementById("bcraSave").onclick = () => {
+    m.cheques = document.getElementById("bcraChequesCheckbox").checked;
+    closeBcraPanel();
+    renderTable();
+    renderStats();
+  };
+  document.getElementById("bcraOverlay").style.display = "flex";
+}
+function closeBcraPanel() {
+  document.getElementById("bcraOverlay").style.display = "none";
+}
+document.getElementById("bcraClose").addEventListener("click", closeBcraPanel);
+document.getElementById("bcraOverlay").addEventListener("click", (e) => { if (e.target.id === "bcraOverlay") closeBcraPanel(); });
+
+/* ============== eventos generales ============== */
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+dropzone.addEventListener("click", () => fileInput.click());
+["dragenter", "dragover"].forEach((evt) => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); }));
+["dragleave", "drop"].forEach((evt) => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); }));
+dropzone.addEventListener("drop", (e) => { const file = e.dataTransfer.files[0]; if (file) readFile(file); });
+fileInput.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) readFile(file); });
+function readFile(file) {
+  setStatus(`Leyendo ${file.name}...`);
+  const reader = new FileReader();
+  reader.onload = (e) => processText(e.target.result);
+  reader.onerror = () => setStatus("No se pudo leer el archivo.");
+  reader.readAsText(file, "utf-8");
+}
+document.getElementById("parseBtn").addEventListener("click", () => {
+  const text = document.getElementById("pasteArea").value;
+  if (!text.trim()) { setStatus("Pegue contenido o cargue un archivo primero."); return; }
+  processText(text);
+});
+document.getElementById("clearBtn").addEventListener("click", () => {
+  document.getElementById("pasteArea").value = "";
+  document.getElementById("results").style.display = "none";
+  groups = new Map(); manualData = new Map(); sortedCuits = [];
+  setStatus(""); fileInput.value = "";
+});
+document.getElementById("searchInput").addEventListener("input", renderTable);
+document.getElementById("claseFilter").addEventListener("change", renderTable);
+
+const themeToggle = document.getElementById("themeToggle");
+themeToggle.addEventListener("click", () => {
+  const root = document.documentElement;
+  const current = root.getAttribute("data-theme");
+  if (current === "dark") { root.setAttribute("data-theme", "light"); themeToggle.textContent = "Modo oscuro"; }
+  else { root.setAttribute("data-theme", "dark"); themeToggle.textContent = "Modo claro"; }
+});
+
+/* ============== export / import ============== */
+function exportRows() {
+  return sortedCuits.map((cuit) => {
+    const g = groups.get(cuit);
+    const m = getManual(cuit);
+    const r = classify(cuit);
+    return {
+      "CUIT": cuit,
+      "Entidades": [...g.entidades].join(", "),
+      "Situacion BCRA vigente": SITUACION_BCRA_LABEL[g.situacionEfectiva] ?? "Sin dato",
+      "Deuda total (miles $)": g.deudaTotal,
+      "% deuda situacion 3/4": (g.pct34 * 100).toFixed(1) + "%",
+      "Cheques rechazados": m.cheques ? "Si" : "No",
+      "Canal": m.canal === "COM" ? "Comercial" : "Open Market",
+      "Cuota/Ingreso %": m.cuota ?? "",
+      "Alquiler solicitado $": m.alquiler ?? "",
+      "Avalistas": m.avalistas,
+      "Cuota/Ingreso con aval %": m.cuotaAval ?? "",
+      "Clasificacion": r.label,
+      "Motivo": r.motivos.join("; "),
+    };
+  });
+}
+
+document.getElementById("downloadXlsx").addEventListener("click", () => {
+  if (!sortedCuits.length) return;
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exportRows());
+  XLSX.utils.book_append_sheet(wb, ws, "Clasificacion");
+  XLSX.writeFile(wb, "clasificacion_situaciones.xlsx");
+});
+document.getElementById("downloadCsv").addEventListener("click", () => {
+  if (!sortedCuits.length) return;
+  downloadCsvFromObjects(exportRows(), "clasificacion_situaciones.csv");
+});
+document.getElementById("downloadTemplate").addEventListener("click", () => {
+  if (!sortedCuits.length) return;
+  const rows = sortedCuits.map((cuit) => {
+    const m = getManual(cuit);
+    return {
+      "CUIT": cuit,
+      "ChequesRechazados(Si/No)": m.cheques ? "Si" : "No",
+      "Canal(OM/COM)": m.canal,
+      "CuotaIngresoPct": m.cuota ?? "",
+      "MontoAlquiler": m.alquiler ?? "",
+      "Avalistas(0-2)": m.avalistas,
+      "CuotaIngresoConAvalPct": m.cuotaAval ?? "",
+    };
+  });
+  downloadCsvFromObjects(rows, "plantilla_datos_manuales.csv");
+});
+function downloadCsvFromObjects(objs, filename) {
+  const headers = Object.keys(objs[0]);
+  const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [headers.map(escape).join(",")].concat(objs.map((o) => headers.map((h) => escape(o[h])).join(",")));
+  const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+document.getElementById("importManualCsv").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const text = ev.target.result;
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
+    if (lines.length < 2) return;
+    const headers = parseCsvLine(lines[0]);
+    for (let i = 1; i < lines.length; i++) {
+      const vals = parseCsvLine(lines[i]);
+      const obj = {}; headers.forEach((h, idx) => { obj[h] = vals[idx]; });
+      const cuit = obj["CUIT"];
+      if (!cuit || !groups.has(cuit)) continue;
+      const m = getManual(cuit);
+      if (obj["ChequesRechazados(Si/No)"] !== undefined) m.cheques = /^s/i.test(obj["ChequesRechazados(Si/No)"] || "");
+      if (obj["Canal(OM/COM)"] !== undefined && obj["Canal(OM/COM)"]) m.canal = obj["Canal(OM/COM)"].toUpperCase().startsWith("COM") ? "COM" : "OM";
+      if (obj["CuotaIngresoPct"] !== undefined) m.cuota = obj["CuotaIngresoPct"] === "" ? null : parseFloat(obj["CuotaIngresoPct"]);
+      if (obj["MontoAlquiler"] !== undefined) m.alquiler = obj["MontoAlquiler"] === "" ? null : parseFloat(obj["MontoAlquiler"]);
+      if (obj["Avalistas(0-2)"] !== undefined && obj["Avalistas(0-2)"] !== "") m.avalistas = parseInt(obj["Avalistas(0-2)"], 10);
+      if (obj["CuotaIngresoConAvalPct"] !== undefined) m.cuotaAval = obj["CuotaIngresoConAvalPct"] === "" ? null : parseFloat(obj["CuotaIngresoConAvalPct"]);
+    }
+    renderAll();
+    setStatus(`Datos manuales importados desde ${file.name}.`);
+    e.target.value = "";
+  };
+  reader.readAsText(file, "utf-8");
+});
+function parseCsvLine(line) {
+  const out = []; let cur = ""; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; } }
+      else cur += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ",") { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+</script>
+</body>
+</html>
