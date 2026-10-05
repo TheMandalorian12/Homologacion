@@ -113,6 +113,8 @@ table.calc .campo{display:block;font-family:var(--f-mono);font-size:11px;color:v
 .fe-n{font-family:var(--f-mono);font-weight:600;font-size:16px;color:var(--accent);white-space:nowrap}
 .fe-n small{font-size:11px;color:var(--muted);font-weight:400}
 .fe-d{font-size:11.5px;color:var(--muted);line-height:1.35;min-width:0}
+.fe-mini{font-family:var(--f-mono);font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:0 5px}
+.fe-src{font-size:11px;color:var(--muted)}
 .esc-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
 .esc-row:last-child{border-bottom:0}
 .esc-row.col{flex-direction:column;align-items:flex-start;gap:2px}
@@ -680,9 +682,14 @@ function controlarCuits(){
    (CUIT 30-, 33- o 34-), con la categoría de facturación que informa Nosis */
 function esJuridicaPorCuit(d){ return /^(30|33|34)/.test(normCuit(d&&d.cuitCuilCdi)); }
 function feDe(d){
-  if(!esJuridicaPorCuit(d)) return null;
-  const n=Math.trunc(getDec(d,CAMPO_FE)); const row=cfg.fe.find(x=>x[0]===n);
-  return n>0&&row?{n,row,fuente:"Categoría informada por Nosis"}:null;
+  if(esJuridicaPorCuit(d)){
+    const n=Math.trunc(getDec(d,CAMPO_FE)); const row=cfg.fe.find(x=>x[0]===n);
+    return n>0&&row?{n,row,fuente:"categoría Nosis"}:null;
+  }
+  // Persona física: tramo Mínimo < ingreso NSE ≤ Máximo (solo referencia, la clase no lo usa)
+  const ing=getDec(d,"nivelSocioeconomicoIngresoPromedio"); if(!(ing>0)) return null;
+  const row=cfg.fe.find(x=>(x[1]==null||ing>x[1])&&(x[2]==null||ing<=x[2]));
+  return row?{n:row[0],row,fuente:"por ingreso NSE"}:null;
 }
 function rangoFE(row){ return row[1]==null?`hasta ${fmt(row[2])}`:row[2]==null?`más de ${fmt(row[1])}`:`${fmt(row[1])} – ${fmt(row[2])}`; }
 /* Tarjetas: la estructura (con su caja para pegar) se arma una vez; en cada recálculo solo se actualiza el contenido */
@@ -747,10 +754,8 @@ function cardInfo(k,label,P){
       <dt>Cheques rechazados</dt><dd class="${cheq?"bad":""}">${cheq}</dd>
       ${s34?`<dt>Deuda sit. 3-4</dt><dd class="${s34>20?"bad":""}">${nf(s34)} %</dd>`:""}
       ${juridica?"":`<dt>Ingreso NSE mensual</dt><dd>${getDec(d,"nivelSocioeconomicoIngresoPromedio")>0?fmt(getDec(d,"nivelSocioeconomicoIngresoPromedio")):"Sin dato"}</dd>`}
-    </dl>
-    ${(()=>{ if(!esJuridicaPorCuit(d)) return ""; const fe=feDe(d); return fe
-      ? `<div class="fe-box"><span class="fe-n">FE_${fe.n}<small> de 16</small></span><span class="fe-d">${esc(fe.fuente)}<br>${rangoFE(fe.row)}${fe.row[3]!=null?" · valor "+fmt(fe.row[3]):" · sin valor"}</span></div>`
-      : ""; })()}`;
+      ${(()=>{ const fe=feDe(d); return fe?`<dt>Tabla FE</dt><dd><span class="fe-mini" title="${esc(rangoFE(fe.row))}">FE_${fe.n}</span> <span class="fe-src">${esc(fe.fuente)}</span></dd>`:""; })()}
+    </dl>`;
 }
 
 function run(){
