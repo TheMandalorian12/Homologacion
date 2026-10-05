@@ -387,12 +387,12 @@ function evaluar(input,cfg,nombres){
     if(ps===0){
       const cl=p24<=0?"0-B":(p24<=2?"0-A":"0-C");
       if(cl==="0-C"){
-        paso("bad","Situación vigente 0 · clasificación 0-C",`Peor situación 24 meses = ${p24}: deterioro histórico.`);
-        return corta(R.BCRA,"BCRA · clasificación 0-C",{texto:`${quien(k)} no tiene deuda vigente informada (situación 0), pero en los últimos 24 meses llegó a <b>situación ${p24}</b>. La clase lo clasifica como 0-C (deterioro histórico) y rechaza.`,
-          filas:[["Situación vigente",SF.peorSituacion,sitTxt(ps),"—",null],["Peor situación 24 meses",SF.peorSituacion24Meses,String(p24),"1 o 2 (0-A)",false]],acciones:["No se resuelve con avalista: el rechazo por BCRA corta el proceso. Reemplazar al titular."]},`Clasificación 0-C (24 meses = ${p24}).`);
+        paso("bad","Clasificación 0-C · deterioro histórico",`Situación vigente 0, pero el historial de los últimos 24 meses muestra situación ${p24}.`);
+        return corta(R.BCRA,"Clasificación 0-C",{texto:`${quien(k)} tiene situación vigente 0, pero su historial de los últimos 24 meses muestra <b>situación ${p24}</b> (deterioro histórico). Clasificación <b>0-C</b> · tratamiento: <b>rechazo</b>.`,
+          filas:[["Situación vigente","","0 (sin dato)","—",null],["Historial de los últimos 24 meses","",`situación ${p24}`,"1 o 2",false]],acciones:["No se resuelve con avalista: el rechazo corta el proceso. Reemplazar al titular."]},`Clasificación 0-C: historial de 24 meses en situación ${p24}.`);
       }
-      if(cl==="0-B"){esOB=true;sinHistorial.push(k);paso("warn","Situación vigente 0 · clasificación 0-B","Sin historial propio en 24 meses: requiere avalista.");bcraTxt="0-B: sin historial";}
-      else {paso("ok","Situación vigente 0 · clasificación 0-A",`Peor situación 24 meses = ${p24}.`);bcraTxt="0-A";}
+      if(cl==="0-B"){esOB=true;sinHistorial.push(k);paso("warn","Clasificación 0-B · sin historial propio","Situación vigente 0 y el historial de los últimos 24 meses tampoco tiene dato: se solicitan avalistas.");bcraTxt="0-B: sin historial";}
+      else {paso("ok","Clasificación 0-A",`Situación vigente 0 y el historial de los últimos 24 meses muestra situación ${p24}: continúa el flujo normal.`);bcraTxt="0-A";}
     } else {
       const chk=[["Situación vigente",SF.peorSituacion,ps,"≤ 4",ps<=4],["Peor situación 6 meses",SF.peorSituacion6Meses,p6,"1 o 2",p6>0&&p6<=2],["Peor situación 12 meses",SF.peorSituacion12Meses,p12,"1 o 2",p12>0&&p12<=2],["Peor situación 24 meses",SF.peorSituacion24Meses,p24,"1 o 2",p24>0&&p24<=2]];
       const malos=chk.filter(c=>!c[4]);
@@ -468,9 +468,9 @@ function evaluar(input,cfg,nombres){
     if(cubreTodo) acciones.push("Con un avalista aprobado la validación saldría exitosa: hay un CUIT en el tramo superior de facturación.");
     else if(ent) acciones.push(`Con los ingresos actuales el compromiso ya entra (usa el ${nf(comp/permitido*100)} % del permitido), así que con un avalista que apruebe los controles la validación saldría exitosa.`);
     else acciones.push(`Además, el compromiso supera el ingreso permitido: el avalista debería sumar al menos ${fmt(faltante)} de ingreso computable.`);
-    return fin(R.AVAL,{regla:"Sin historial (0-B) · sin avalista",
-      texto:`${sinHistorial.map(quien).join(" y ")} ${varios?"tienen":"tiene"} situación vigente <b>0</b> y también <b>0 en los últimos 24 meses</b>: Nosis no registra deuda en el sistema financiero, así que no hay historial propio para evaluar (clasificación interna <b>0-B</b>). En ese caso la clase pide un avalista <b>antes</b> de comparar la cuota contra el ingreso, por eso el resultado no depende del monto del alquiler.`,
-      filas:[].concat(...sinHistorial.map(k=>{const dd=input[k].Datos,l=PERSONAS.find(p=>p[0]===k)[1];return [[`${l} · situación vigente`,SF.peorSituacion,sitTxt(getDec(dd,"peorSituacion")),"—",null],[`${l} · peor situación 24 meses`,SF.peorSituacion24Meses,sitTxt(getDec(dd,"peorSituacion24Meses")),"1 o 2 para ser 0-A",false]];}),[["Avalistas informados","Individuo__c = Avalista 1/2","ninguno","al menos uno",false]]),
+    return fin(R.AVAL,{regla:"Clasificación 0-B · sin avalista",
+      texto:`${sinHistorial.map(quien).join(" y ")} ${varios?"tienen":"tiene"} situación vigente 0 y el historial de los últimos 24 meses tampoco tiene dato: <b>no acredita historial financiero reciente propio</b> (clasificación <b>0-B</b>). Tratamiento: <b>se solicitan avalistas</b>; cuando la solicitud trae un avalista informado, la evaluación continúa normal. Por eso, hoy el resultado no depende del monto del alquiler.`,
+      filas:[].concat(...sinHistorial.map(k=>{const l=PERSONAS.find(p=>p[0]===k)[1];return [[`${l} · situación vigente`,"","0 (sin dato)","—",null],[`${l} · historial de los últimos 24 meses`,"","sin dato","situación 1 o 2 (0-A)",false]];}),[["Avalistas informados","","ninguno","al menos uno",false]]),
       acciones});
   }
   if(sinHistorial.length) cam("ok","Avalista por falta de historial","Hay CUIT en 0-B y se informó avalista.");
