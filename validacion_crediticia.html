@@ -676,16 +676,13 @@ function controlarCuits(){
   return m;
 }
 
-/* Etapa de la tabla FE (HS_Parametro_Suscripcion__c FE_1..FE_16) de cada persona:
-   jurídica → la categoría que informa Nosis; física → el tramo Mínimo < ingreso NSE ≤ Máximo */
+/* Etapa de la tabla FE (HS_Parametro_Suscripcion__c FE_1..FE_16): solo para personas jurídicas
+   (CUIT 30-, 33- o 34-), con la categoría de facturación que informa Nosis */
+function esJuridicaPorCuit(d){ return /^(30|33|34)/.test(normCuit(d&&d.cuitCuilCdi)); }
 function feDe(d){
-  if(indicador(d,"esEmpleador")){
-    const n=Math.trunc(getDec(d,CAMPO_FE)); const row=cfg.fe.find(x=>x[0]===n);
-    return n>0&&row?{n,row,fuente:"Categoría informada por Nosis"}:null;
-  }
-  const ing=getDec(d,"nivelSocioeconomicoIngresoPromedio"); if(!(ing>0)) return null;
-  const row=cfg.fe.find(x=>(x[1]==null||ing>x[1])&&(x[2]==null||ing<=x[2]));
-  return row?{n:row[0],row,fuente:`Por ingreso NSE de ${fmt(ing)}`}:null;
+  if(!esJuridicaPorCuit(d)) return null;
+  const n=Math.trunc(getDec(d,CAMPO_FE)); const row=cfg.fe.find(x=>x[0]===n);
+  return n>0&&row?{n,row,fuente:"Categoría informada por Nosis"}:null;
 }
 function rangoFE(row){ return row[1]==null?`hasta ${fmt(row[2])}`:row[2]==null?`más de ${fmt(row[1])}`:`${fmt(row[1])} – ${fmt(row[2])}`; }
 /* Tarjetas: la estructura (con su caja para pegar) se arma una vez; en cada recálculo solo se actualiza el contenido */
@@ -751,9 +748,9 @@ function cardInfo(k,label,P){
       ${s34?`<dt>Deuda sit. 3-4</dt><dd class="${s34>20?"bad":""}">${nf(s34)} %</dd>`:""}
       ${juridica?"":`<dt>Ingreso NSE mensual</dt><dd>${getDec(d,"nivelSocioeconomicoIngresoPromedio")>0?fmt(getDec(d,"nivelSocioeconomicoIngresoPromedio")):"Sin dato"}</dd>`}
     </dl>
-    ${(()=>{ const fe=feDe(d); return fe
+    ${(()=>{ if(!esJuridicaPorCuit(d)) return ""; const fe=feDe(d); return fe
       ? `<div class="fe-box"><span class="fe-n">FE_${fe.n}<small> de 16</small></span><span class="fe-d">${esc(fe.fuente)}<br>${rangoFE(fe.row)}${fe.row[3]!=null?" · valor "+fmt(fe.row[3]):" · sin valor"}</span></div>`
-      : `<div class="fe-box vacio"><span class="fe-d">Sin etapa FE: ${juridica?"Nosis no informa categoría de facturación":"no hay ingreso NSE informado"}</span></div>`; })()}`;
+      : ""; })()}`;
 }
 
 function run(){
