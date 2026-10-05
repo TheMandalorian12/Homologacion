@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style><title>Validación Crediticia Caución</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: formulario a la izquierda (operación + JSON de Reporte_Nosis__c + fichas por individuo), dictamen y explicación fijos a la derecha; una columna en móvil */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --sunk:#e9edf1; --line:#d3dae2;
+  --fg:#17212b; --muted:#5b6876; --accent:#1f5f8b; --accent-soft:#dbe8f2;
+  --ok:#1d7a4c; --ok-soft:#dcf0e5; --warn:#9a6200; --warn-soft:#fbecd0; --bad:#b3261e; --bad-soft:#f8dedb;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11161c; --surface:#18202a; --sunk:#0d1217; --line:#2b3643;
+  --fg:#e3e9ef; --muted:#93a1b0; --accent:#6fb0dd; --accent-soft:#1c3346;
+  --ok:#5fcf93; --ok-soft:#173528; --warn:#f0b54d; --warn-soft:#3a2c12; --bad:#f2857d; --bad-soft:#3d1c1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161c; --surface:#18202a; --sunk:#0d1217; --line:#2b3643;
+  --fg:#e3e9ef; --muted:#93a1b0; --accent:#6fb0dd; --accent-soft:#1c3346;
+  --ok:#5fcf93; --ok-soft:#173528; --warn:#f0b54d; --warn-soft:#3a2c12; --bad:#f2857d; --bad-soft:#3d1c1a; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.wrap{max-width:1220px;margin:0 auto;padding-inline:16px;padding-block:24px 48px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 24px;margin-bottom:20px}
+h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;max-width:70ch}
+.ref{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:20px;align-items:start}
+@media (max-width:960px){.grid{grid-template-columns:minmax(0,1fr)}}
+section.box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px;font-weight:600}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:500;min-width:0}
+input[type=text],input[type=number],select,textarea{font:inherit;font-size:14px;color:var(--fg);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%}
+textarea{font-family:var(--f-mono);font-size:12px;resize:vertical}
+#json{min-height:150px;line-height:1.45}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.num{font-variant-numeric:tabular-nums}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.checks label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg);cursor:pointer}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;border:0;background:var(--sunk);color:var(--fg);padding:7px 10px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--surface)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.hint{font-size:12px;color:var(--muted)}
+.btn{font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:6px;padding:7px 12px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.small{font-size:12px;padding:4px 10px}
+.card .paste{display:flex;flex-direction:column;gap:6px}
+.card .paste textarea{min-height:64px;background:var(--surface)}
+.card.empty .paste textarea{background:var(--sunk)}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600;font-size:13px}
+.msgs{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.msg{font-size:12.5px}
+.msg.bad{color:var(--bad)} .msg.ok{color:var(--ok)} .msg.warn{color:var(--warn)}
+/* Fichas por individuo */
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:14px}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--surface);min-width:0;display:flex;flex-direction:column;gap:8px}
+.card.empty{border-style:dashed;background:transparent;color:var(--muted);justify-content:center;min-height:76px}
+.card.ok{border-left:3px solid var(--ok)} .card.bad{border-left:3px solid var(--bad)} .card.warn{border-left:3px solid var(--warn)}
+.card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.card .who{font-weight:700;font-size:13.5px;line-height:1.3;overflow-wrap:anywhere}
+.card .rol{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;font-size:12.5px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.kv dd.bad{color:var(--bad);font-weight:600}
+/* Dictamen */
+.verdict-col{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;flex-direction:column;gap:16px;min-width:0;max-height:calc(100vh - 24px);overflow-y:auto}
+@media (max-width:960px){.verdict-col{position:static;max-height:none;overflow:visible}}
+.verdict{border-radius:var(--r);padding:16px;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;gap:10px}
+.verdict .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.verdict .res{font-size:17px;font-weight:700;line-height:1.3;text-wrap:balance}
+.verdict.ok{background:var(--ok-soft);border-color:var(--ok)} .verdict.ok .res{color:var(--ok)}
+.verdict.warn{background:var(--warn-soft);border-color:var(--warn)} .verdict.warn .res{color:var(--warn)}
+.verdict.bad{background:var(--bad-soft);border-color:var(--bad)} .verdict.bad .res{color:var(--bad)}
+.verdict .why{font-size:13.5px;line-height:1.55}
+.verdict .why b{font-weight:600}
+.facts{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:6px;overflow:hidden}
+.facts th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+.facts td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+.facts tr:last-child td{border-bottom:0}
+.facts td.v{font-family:var(--f-mono);font-size:12px;white-space:nowrap}
+.facts td.v.bad{color:var(--bad);font-weight:600} .facts td.v.ok{color:var(--ok)}
+.facts .campo{display:block;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.todo{margin:0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.sublbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.path{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.path li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;padding-bottom:10px;position:relative}
+.path li:not(:last-child)::before{content:"";position:absolute;left:10px;top:22px;bottom:0;width:2px;background:var(--line)}
+.path .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--sunk);color:var(--muted)}
+.path li.ok .n{background:var(--ok-soft);color:var(--ok)} .path li.bad .n{background:var(--bad-soft);color:var(--bad)} .path li.warn .n{background:var(--warn-soft);color:var(--warn)}
+.path li.skip{opacity:.55}
+.path .t{font-size:13px;font-weight:600;line-height:22px}
+.path .s{font-size:12px;color:var(--muted)}
+table.calc{width:100%;border-collapse:collapse;font-size:13px}
+table.calc td{padding:5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+table.calc td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:12px;white-space:nowrap;padding-left:10px}
+table.calc tr.tot td{font-weight:700}
+table.calc .campo{display:block;font-family:var(--f-mono);font-size:11px;color:var(--muted);font-weight:400}
+.params tr.fe-activo td{background:var(--accent-soft);font-weight:600}
+.bar{height:8px;background:var(--sunk);border-radius:4px;overflow:hidden;margin-top:10px}
+.bar>i{display:block;height:100%;background:var(--ok)}
+.bar.over>i{background:var(--warn)}
+.trace{display:flex;flex-direction:column;gap:12px}
+.trace h3{font-size:13px;margin:0 0 4px;display:flex;justify-content:space-between;gap:8px}
+.trace ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.trace li{display:grid;grid-template-columns:16px minmax(0,1fr);gap:6px;font-size:12.5px}
+.trace li .m{font-weight:700}
+.trace li.ok .m{color:var(--ok)} .trace li.bad .m{color:var(--bad)} .trace li.warn .m{color:var(--warn)}
+.trace li small{color:var(--muted);display:block}
+.chip{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;background:var(--sunk);color:var(--muted);white-space:nowrap;text-transform:none;letter-spacing:0}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+.params table{width:100%;border-collapse:collapse;font-size:12.5px}
+.params th,.params td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
+.params td input{padding:4px 6px;font-size:12.5px;font-family:var(--f-mono)}
+.scroll{overflow-x:auto}
+.note{font-size:12.5px;background:var(--accent-soft);border-radius:6px;padding:10px 12px}
+.note b{font-weight:600}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Validación Crediticia Caución</h1>
+      <p class="sub">Replica las reglas de <span class="ref">HS_ValidacionCrediticia</span> v1.1 (22-600). Cargá la operación, pegá los registros de <span class="ref">Reporte_Nosis__c</span> y el dictamen se recalcula al instante.</p>
+    </div>
+    <div class="row" style="gap:8px">
+      <button class="btn" id="btnLimpiar" type="button">Limpiar</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="stack">
+      <section class="box" aria-labelledby="h-op">
+        <div class="row" style="margin-bottom:12px"><h2 id="h-op" style="margin:0">Datos de la solicitud</h2><span class="hint">Mismos campos que la pantalla de cotización</span></div>
+        <div class="fields op">
+          <label class="f">CUIT Inquilino I *<input id="cuitInq1" type="text" inputmode="numeric" placeholder="27-23346569-6"></label>
+          <label class="f">CUIT Inquilino II<input id="cuitInq2" type="text" inputmode="numeric"></label>
+          <label class="f">CUIT Avalista 1 <span class="hint">(paso Planes)</span><input id="cuitAval1" type="text" inputmode="numeric"></label>
+          <label class="f">CUIT Avalista 2 <span class="hint">(paso Planes)</span><input id="cuitAval2" type="text" inputmode="numeric"></label>
+          <label class="f">Formato de alquiler *
+            <select id="formatoAlquiler"><option value="Fijo">Fijo</option><option value="Fijo/Variable">Fijo + variable</option><option value="Variable">Variable</option></select></label>
+          <label class="f">Tiene expensas *
+            <select id="tieneExpensas"><option value="si">Sí</option><option value="no">No</option></select></label>
+          <label class="f" id="wrapFijo">Valor fijo del alquiler en AR$ *<input id="alquilerFijo" type="number" min="500000" max="5000000" step="0.01" class="num" placeholder="500.000 a 5.000.000"></label>
+          <label class="f" id="wrapVariable">Valor alquiler variable calculado en AR$<input id="alquilerVariable" type="text" class="num" readonly tabindex="-1"><span class="hint" id="hintVariable"></span></label>
+          <label class="f">Incremento de suma asegurada
+            <select id="incrementoSumaAsegurada"><option value="0">0%</option><option value="10">10%</option><option value="20">20%</option><option value="30">30%</option></select></label>
+          <label class="f">Ubicación *
+            <select id="ubicacion"><option value="open">Open Market</option><option value="cc">Centro Comercial</option></select></label>
+          <label class="f">Provincia
+            <select id="provincia"><option value="">Seleccioná</option><option>BUENOS AIRES</option><option>CAPITAL FEDERAL</option><option>CATAMARCA</option><option>CORDOBA</option><option>CORRIENTES</option><option>CHACO</option><option>CHUBUT</option><option>FORMOSA</option><option>ENTRE RIOS</option><option>JUJUY</option><option>LA PAMPA</option><option>LA RIOJA</option><option>MENDOZA</option><option>MISIONES</option><option>NEUQUEN</option><option>RIO NEGRO</option><option>SALTA</option><option>SAN JUAN</option><option>SAN LUIS</option><option>SANTA CRUZ</option><option>SANTA FE</option><option>SANTIAGO DEL ESTERO</option><option>TIERRA DEL FUEGO</option><option>TUCUMAN</option></select></label>
+          <label class="f">M2<input id="m2" type="number" min="0" step="1" class="num"></label>
+          <label class="f">Duración del contrato
+            <select id="duracion"><option>12 meses</option><option>24 meses</option><option>36 meses</option></select></label>
+        </div>
+        <p class="hint" style="margin:10px 0 0">Los CUIT se completan solos al pegar cada reporte Nosis. Provincia, M2 y duración no intervienen en la validación crediticia; están para que la carga coincida con la solicitud.</p>
+        <div class="msgs" id="opMsgs"></div>
+      </section>
+
+      <section class="box" aria-labelledby="h-nosis">
+        <div class="row" style="margin-bottom:4px"><h2 id="h-nosis" style="margin:0">Reportes Nosis</h2><span class="hint">Un reporte por persona: pegá el JSON en la tarjeta que corresponda</span></div>
+        <div class="people" id="people"></div>
+        <details id="detTodos" style="margin-top:14px">
+          <summary>Pegar varios reportes juntos</summary>
+          <p class="hint" style="margin:8px 0">Array de <span class="ref">Reporte_Nosis__c</span> (cada registro va a su tarjeta según <span class="ref">Individuo__c</span>) o el Request Data de <span class="ref">IPValidacionCrediticia</span> del Action Debugger.</p>
+          <textarea id="json" spellcheck="false" style="min-height:110px" placeholder='[ { "Individuo__c": "Inquilino 1", "CUIT_CUIL__c": "27...", ... }, { "Individuo__c": "Avalista 1", ... } ]'></textarea>
+          <div class="row" style="margin-top:8px;justify-content:flex-end"><button class="btn" type="button" id="btnCargarTodos">Cargar</button></div>
+        </details>
+        <div class="msgs" id="msgs"></div>
+      </section>
+
+      <section class="box">
+        <h2>Detalle de controles por CUIT</h2>
+        <div class="trace" id="trace"></div>
+      </section>
+
+      <section class="box params" aria-labelledby="h-par">
+        <details id="detParams">
+          <summary id="h-par">Parametría HS_Parametro_Suscripcion__c</summary>
+          <p class="hint">Valores cargados desde la consulta de la org. Si cambian en Salesforce, actualizalos acá; se guardan en este navegador.</p>
+          <div class="fields" id="paramFields"></div>
+          <h2 style="margin-top:16px">Tabla de facturación estimada (mensual)</h2>
+          <div class="scroll"><table><thead><tr><th>Rango</th><th>Mínimo</th><th>Máximo</th><th>Valor (promedio)</th></tr></thead><tbody id="feBody"></tbody></table></div>
+          <div class="row" style="margin-top:10px"><span class="hint">FE_16 sin valor = cubre cualquier compromiso.</span><button class="btn" type="button" id="btnResetParams">Restaurar valores de la org</button></div>
+        </details>
+      </section>
+    </div>
+
+    <aside class="verdict-col" aria-live="polite">
+      <div class="verdict" id="verdict">
+        <div class="lbl"><span>Resultado</span><span class="chip" id="regla"></span></div>
+        <div class="res" id="res">—</div>
+        <div class="why" id="why"></div>
+        <div id="factsWrap"><div class="sublbl" style="margin-bottom:6px">Datos que definieron el resultado</div>
+          <div class="scroll"><table class="facts"><thead><tr><th>Dato</th><th>Valor</th><th>Se exige</th></tr></thead><tbody id="facts"></tbody></table></div></div>
+        <div id="todoWrap"><div class="sublbl" style="margin-bottom:6px" id="todoLbl">Qué cambiaría el resultado</div><ul class="todo" id="todo"></ul></div>
+      </div>
+      <section class="box">
+        <h2>Camino en el árbol de decisión</h2>
+        <ol class="path" id="path"></ol>
+      </section>
+      <section class="box">
+        <div class="row" style="margin-bottom:12px"><h2 style="margin:0">Cuota contra ingreso</h2><span class="chip" id="calcTag"></span></div>
+        <table class="calc" id="calc"></table>
+        <div class="bar" id="bar"><i style="width:0"></i></div>
+        <div class="hint" id="barTxt" style="margin-top:6px"></div>
+      </section>
+      <div class="note"><b>Sin conexión a Nosis.</b> La página solo lee el JSON que pegás; no consulta Nosis ni Salesforce y nada sale de tu navegador.</div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- Parametría (valores de la org, 05-10-2026) ---------- */
+const PARAMS_ORG = {MONTO_MAXIMO_ALQUILER:5000000,PORCENTAJE_GARANTIA:0.2,PORCENTAJE_EXPENSAS:0.2,PORCENTAJE_OPEN_MARKET:0.25,PORCENTAJE_CENTRO_COMERCIAL:0.3,MULTIPLICADOR_INGRESO:1.125};
+const FE_ORG = [
+ [1,null,3979621,1759848],[2,3979621,7235668,5608025],[3,7235668,13155759,10021112],[4,13155759,23919577,18385542],
+ [5,23919577,43490128,33882750],[6,43490128,79072954,61329645],[7,79072954,143769011,111385155],[8,143769011,261398194,198073052],
+ [9,261398194,475269455,358722332],[10,475269455,864126278,646111062],[11,864126278,1571138696,1172805144],[12,1571138696,2856615804,2083698277],
+ [13,2856615804,5193846919,3857170379],[14,5193846919,9443358033,6904853567],[15,9443358033,17169741877,12650375080],[16,17169741877,null,null]
+];
+const PERSONAS=[["inquilino1","Inquilino 1"],["inquilino2","Inquilino 2"],["avalista1","Avalista 1"],["avalista2","Avalista 2"]];
+const AVALISTAS=["avalista1","avalista2"];
+const R={MONTO:"RECHAZO POR MONTO DE ALQUILER",CHEQUES:"RECHAZO POR CHEQUES RECHAZADOS",CUIT:"RECHAZO POR CUIT INVALIDO",BCRA:"RECHAZO POR BCRA",BCRA34:"RECHAZO POR BCRA 3-4",DEP:"RECHAZO POR RELACION DE DEPENDENCIA",AVAL:"NECESITA UN AVALISTA",OK:"VALIDACION CREDITICIA EXITOSA DE TODOS LOS CUIT",ERR:"ERROR EN VALIDACION CREDITICIA"};
+const CAMPO_FE="clasificacionDeLaEmpresaConsultadaPorRangosDeFacturacionSobreVentasRealesSiExisteBalanceOVentasPronosticadasAnualesAperturaDe16Rangos";
+/* Campos de Reporte_Nosis__c -> claves que lee la clase en el nodo Datos */
+const MAPEO={cuit_cuil__c:"cuitCuilCdi",es_empleador__c:"esEmpleador",es_autonomo__c:"esAutonomo",es_monotributista__c:"esMonotributista",es_empleado__c:"esEmpleado",es_retirado__c:"esRetirado",es_jubilado__c:"esJubilado",
+ peor_situacion_percibida__c:"peorSituacion",peor_situacion_6_meses__c:"peorSituacion6Meses",peor_situacion_12_meses__c:"peorSituacion12Meses",peor_situacion_24_meses__c:"peorSituacion24Meses",
+ ultimos_30_cheques_rechazados__c:"ultimos30ChequesRechazados",detalle_ultimo_reporte_entidades__c:"detalleDelUltimoInformePorEntidad",
+ ingreso_promedio_estado_socieconomico__c:"nivelSocioeconomicoIngresoPromedio",clasificacion_emp_por_rangos_facturacion__c:CAMPO_FE};
+/* Nombre de campo que se muestra en la explicación (el que ve el usuario en Reporte_Nosis__c) */
+const SF={cuitCuilCdi:"CUIT_CUIL__c",esEmpleador:"Es_empleador__c",esAutonomo:"Es_Autonomo__c",esMonotributista:"Es_Monotributista__c",esEmpleado:"Es_Empleado__c",esRetirado:"Es_Retirado__c",esJubilado:"Es_Jubilado__c",
+ peorSituacion:"Peor_Situacion_Percibida__c",peorSituacion6Meses:"Peor_Situacion_6_Meses__c",peorSituacion12Meses:"Peor_Situacion_12_Meses__c",peorSituacion24Meses:"Peor_Situacion_24_Meses__c",
+ ultimos30ChequesRechazados:"Ultimos_30_cheques_rechazados__c",detalleDelUltimoInformePorEntidad:"Detalle_Ultimo_Reporte_Entidades__c",nivelSocioeconomicoIngresoPromedio:"Ingreso_Promedio_Estado_Socieconomico__c",[CAMPO_FE]:"Clasificacion_emp_por_rangos_facturacion__c"};
+/* La clase lee clasificacionDeLaEmpresaConsultadaPorRangosDeFacturacion... (16 rangos), que en Reporte_Nosis__c es
+   Clasificacion_emp_por_rangos_facturacion__c. Si viene vacío se usa Clasificacion_Estimada_de_Facturacion__c como respaldo. */
+const FE_RESPALDO="clasificacion_estimada_de_facturacion__c";
+const INDIVIDUO={"inquilino 1":"inquilino1","inquilino 2":"inquilino2","avalista 1":"avalista1","avalista 2":"avalista2"};
+
+/* ---------- Helpers equivalentes a los de Apex ---------- */
+function toDec(v){ if(v===null||v===undefined) return 0; const s=String(v).trim(); if(s===""||s==="null") return 0; const n=Number(s.replace(",",".")); return isFinite(n)?n:0; }
+function getStr(o,k){ if(!o||o[k]===undefined||o[k]===null) return ""; const s=String(o[k]).trim(); return s==="null"?"":s; }
+function getDec(o,k){ return (!o||!(k in o))?0:toDec(o[k]); }
+function getBool(o,k){ if(!o||o[k]==null) return false; const v=o[k]; return typeof v==="boolean"?v:String(v).toLowerCase()==="true"; }
+function indicador(o,k){ if(!o||o[k]==null) return false; const v=o[k]; if(typeof v==="boolean") return v; const s=String(v).trim().toLowerCase(); return s==="si"||s==="true"||s==="1"; }
+function normCuit(c){ return c?String(c).replace(/[^0-9]/g,""):""; }
+function fmtCuit(c){ return normCuit(c).replace(/^(\d{2})(\d{8})(\d)$/,"$1-$2-$3"); }
+function dvCuit(n){ const m=[5,4,3,2,7,6,5,4,3,2]; let s=0; for(let i=0;i<10;i++) s+=Number(n[i])*m[i]; let d=11-(s%11); if(d===11) d=0; else if(d===10) d=9; return d; }
+function cuitValido(c){ const n=normCuit(c); return n.length===11&&dvCuit(n)===Number(n[10]); }
+function tipoPersona(d){
+  if(indicador(d,"esEmpleador")) return "JURIDICA";
+  if(indicador(d,"esAutonomo")||indicador(d,"esMonotributista")) return "FISICA";
+  if(indicador(d,"esEmpleado")) return "EMPLEADO";
+  return "INVALIDA";
+}
+function contarD(x){ return (String(x||"").match(/<D>/g)||[]).length; }
+function tieneCheques(d){ const x=getStr(d,"ultimos30ChequesRechazados"); return x!==""&&x.indexOf("<D>")>=0; }
+function entidades34(det){ const out=[]; if(!det) return out; const re=/<D>([\s\S]*?)<\/D>/g; let m; while((m=re.exec(det))){ const c=m[1].split("|"); if(c.length>4){ const s=toDec(c[2]); if(s===3||s===4) out.push({entidad:c[0],sit:s,pct:toDec(c[4])}); } } return out; }
+function sumar34(det){ return entidades34(det).reduce((a,e)=>a+e.pct,0); }
+const ars=new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0});
+const fmt=v=>ars.format(v);
+const pct=v=>(v*100).toLocaleString("es-AR",{maximumFractionDigits:2})+" %";
+const nf=v=>Number(v).toLocaleString("es-AR",{maximumFractionDigits:4});
+const siNo=v=>v?"Sí":"No";
+function esc(s){ return String(s).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+const sitTxt=v=>v===0?"0 (sin dato)":String(v);
+
+/* ---------- Motor: mismo orden que evaluarSuscripcion, guardando el porqué ---------- */
+// filas: [dato, campo, valor, seExige, estado(true|false|null)]
+function evaluar(input,cfg,nombres){
+  nombres=nombres||{};
+  const out={personas:{},calc:null,calcInfo:false,resultado:"",regla:"",texto:"",filas:[],acciones:[],camino:[]};
+  const cam=(c,t,s)=>out.camino.push({c,t,s:s||""});
+  const fin=(r,o)=>{out.resultado=r;Object.assign(out,o||{});return out;};
+  const quien=k=>{const l=PERSONAS.find(p=>p[0]===k)[1]; return nombres[k]?`<b>${esc(l)}</b> (${esc(nombres[k])})`:`<b>${esc(l)}</b>`;};
+  const rangos={}; cfg.fe.forEach(r=>{rangos[r[0]]={promedio:(r[3]===null||r[3]===""||isNaN(r[3]))?null:Number(r[3])};});
+  const fijo=getDec(input,"alquilerFijo"), variable=getDec(input,"alquilerVariable"), total=fijo+variable;
+  const inc=getDec(input,"incrementoSumaAsegurada"), factor=inc>0?1+inc/100:1;
+  const tope=cfg.p.MONTO_MAXIMO_ALQUILER*factor;
+  const restoCamino=desde=>{ const pasos=["Controles por CUIT","Avalista por falta de historial","Cuota contra ingreso"]; pasos.slice(desde).forEach(t=>cam("skip",t,"No se evaluó: el proceso se detuvo antes.")); };
+
+  if(total>tope){
+    cam("bad","Monto de alquiler",`${fmt(total)} supera el tope de ${fmt(tope)}.`); restoCamino(0);
+    return fin(R.MONTO,{regla:"Monto de alquiler",
+      texto:`El alquiler total (fijo + variable) es <b>${fmt(total)}</b> y el máximo asegurable es <b>${fmt(tope)}</b>. Es el primer control del árbol, así que no se llegan a revisar los reportes Nosis.`,
+      filas:[["Alquiler fijo + variable","",fmt(total),"≤ "+fmt(tope),false],["Tope","MONTO_MAXIMO_ALQUILER × factor",`${fmt(cfg.p.MONTO_MAXIMO_ALQUILER)} × ${nf(factor)}`,"",null]],
+      acciones:[`Bajar el alquiler total a ${fmt(tope)} o menos.`]});
+  }
+  if(getStr(input,"formatoAlquiler")==="Fijo"&&fijo>5000000){
+    cam("bad","Monto de alquiler (formato Fijo)",`${fmt(fijo)} supera 5.000.000.`); restoCamino(0);
+    return fin(R.MONTO,{regla:"Monto de alquiler · formato Fijo",
+      texto:`Con formato <b>Fijo</b> la clase compara el alquiler fijo contra <b>5.000.000 escrito en el código</b> (línea 95), sin aplicar el incremento ni el parámetro MONTO_MAXIMO_ALQUILER. El alquiler fijo es <b>${fmt(fijo)}</b>.`,
+      filas:[["Alquiler fijo","",fmt(fijo),"≤ $ 5.000.000",false],["Formato","formatoAlquiler","Fijo","",null]],
+      acciones:["Bajar el alquiler fijo a $ 5.000.000 o menos.","Si el tope debería seguir al parámetro, hay que corregir la línea 95 de la clase."]});
+  }
+  cam("ok","Monto de alquiler",`${fmt(total)} dentro del tope de ${fmt(tope)}.`);
+
+  let ingresos=0, cubreTodo=false; const sinHistorial=[];
+  for(const [k,label] of PERSONAS){
+    const rep=input[k]; const P={label,pasos:[],estado:"na",ingreso:0,tipo:""}; out.personas[k]=P;
+    const paso=(c,t,s)=>P.pasos.push({c,t,s:s||""});
+    const corta=(r,regla,o,res)=>{P.estado="bad";cam("bad",`${label} · ${regla}`,res);restoCamino(1);return fin(r,Object.assign({regla:`${regla} · ${label}`},o));};
+    if(!rep||Object.keys(rep).length===0){
+      if(k==="inquilino1"){
+        paso("bad","Reporte no informado","Inquilino 1 es obligatorio.");
+        return corta(R.CUIT,"Reporte faltante",{texto:"No hay ningún registro con <b>Individuo__c = \"Inquilino 1\"</b>. La clase trata la falta del inquilino principal como CUIT inválido.",
+          filas:[["Reporte de Inquilino 1","Individuo__c","no encontrado","obligatorio",false]],acciones:["Pegar el registro de Reporte_Nosis__c del inquilino principal con Individuo__c = \"Inquilino 1\"."]},"Falta el reporte.");
+      }
+      cam("skip",label,"No informado."); continue;
+    }
+    const d=rep.Datos||{};
+    // Cheques
+    if(tieneCheques(d)){
+      const n=contarD(getStr(d,"ultimos30ChequesRechazados"));
+      paso("bad","Cheques rechazados",`${n} cheque(s) en el detalle.`);
+      return corta(R.CHEQUES,"Cheques rechazados",{texto:`Nosis informa <b>${n} cheque${n>1?"s":""} rechazado${n>1?"s":""}</b> para ${quien(k)}. La regla no mira montos ni fechas: cualquier cheque en el detalle rechaza la operación.`,
+        filas:[["Cheques rechazados",SF.ultimos30ChequesRechazados,`${n}`,"0 (<Detalle></Detalle>)",false]],
+        acciones:[`Reemplazar a ${label} por un titular sin cheques rechazados.`]},`${n} cheque(s) rechazado(s).`);
+    }
+    paso("ok","Sin cheques rechazados");
+    // CUIT
+    const cuit=getStr(d,"cuitCuilCdi"), nc=normCuit(cuit);
+    if(!cuitValido(cuit)){
+      paso("bad","CUIT inválido",cuit?`"${cuit}" no pasa longitud o dígito verificador.`:"CUIT vacío.");
+      const filas=[["CUIT",SF.cuitCuilCdi,cuit||"vacío","11 dígitos con dígito verificador válido",false]];
+      let det;
+      if(nc.length!==11){ filas.push(["Cantidad de dígitos","",String(nc.length),"11",false]); det=`tiene ${nc.length} dígitos`; }
+      else { filas.push(["Dígito verificador","",nc[10],String(dvCuit(nc)),false]); det=`termina en ${nc[10]} pero, por el cálculo módulo 11, debería terminar en ${dvCuit(nc)}`; }
+      return corta(R.CUIT,"CUIT inválido",{texto:`El CUIT de ${quien(k)} ${cuit?det:"está vacío"}.`,filas,acciones:["Revisar el CUIT cargado en el reporte; si está mal tipeado, volver a consultar Nosis con el CUIT correcto."]},"CUIT con formato o dígito incorrecto.");
+    }
+    paso("ok","CUIT válido",fmtCuit(cuit));
+    // Tipo de persona
+    const tipo=tipoPersona(d); P.tipo=tipo;
+    const filasTipo=()=>[["Empleador",SF.esEmpleador,siNo(indicador(d,"esEmpleador")),"Sí (jurídica)",null],["Autónomo",SF.esAutonomo,siNo(indicador(d,"esAutonomo")),"Sí (física)",null],["Monotributista",SF.esMonotributista,siNo(indicador(d,"esMonotributista")),"Sí (física)",null],["Empleado",SF.esEmpleado,siNo(indicador(d,"esEmpleado")),"—",indicador(d,"esEmpleado")?false:null],["Retirado / jubilado",SF.esRetirado,siNo(indicador(d,"esRetirado")||indicador(d,"esJubilado")),"—",null]];
+    if(tipo==="EMPLEADO"){
+      paso("bad","Relación de dependencia","Es empleado sin ser empleador, autónomo ni monotributista.");
+      return corta(R.DEP,"Relación de dependencia",{texto:`${quien(k)} figura solo como <b>empleado en relación de dependencia</b>. Cada CUIT tiene que ser empleador (persona jurídica) o autónomo/monotributista (persona física); con ninguno de los tres en Sí, la clase rechaza.`,
+        filas:filasTipo(),acciones:[`Reemplazar a ${label} por un titular autónomo, monotributista o empleador.`]},"Solo figura como empleado.");
+    }
+    if(tipo==="INVALIDA"){
+      const ret=indicador(d,"esRetirado")||indicador(d,"esJubilado");
+      paso("bad","Tipo de persona inválido","No es empleador, autónomo ni monotributista.");
+      return corta(R.CUIT,"Tipo de persona inválido",{texto:ret?`${quien(k)} figura como <b>jubilado o retirado</b> y no es empleador, autónomo ni monotributista. La clase no lo admite como titular.`:`Nosis no informa a ${quien(k)} como empleador, autónomo ni monotributista, así que no se lo puede clasificar como persona física ni jurídica.`,
+        filas:filasTipo(),acciones:[`Reemplazar a ${label} por un titular autónomo, monotributista o empleador.`]},"No se pudo clasificar el tipo de persona.");
+    }
+    paso("ok","Persona "+(tipo==="JURIDICA"?"jurídica":"física"),tipo==="JURIDICA"?"Es empleador.":"Autónomo o monotributista.");
+    const juridica=tipo==="JURIDICA";
+    // BCRA
+    const ps=getDec(d,"peorSituacion"),p6=getDec(d,"peorSituacion6Meses"),p12=getDec(d,"peorSituacion12Meses"),p24=getDec(d,"peorSituacion24Meses");
+    let esOB=false, bcraTxt="";
+    if(ps===0){
+      const cl=p24<=0?"0-B":(p24<=2?"0-A":"0-C");
+      if(cl==="0-C"){
+        paso("bad","Situación vigente 0 · clasificación 0-C",`Peor situación 24 meses = ${p24}: deterioro histórico.`);
+        return corta(R.BCRA,"BCRA · clasificación 0-C",{texto:`${quien(k)} no tiene deuda vigente informada (situación 0), pero en los últimos 24 meses llegó a <b>situación ${p24}</b>. La clase lo clasifica como 0-C (deterioro histórico) y rechaza.`,
+          filas:[["Situación vigente",SF.peorSituacion,sitTxt(ps),"—",null],["Peor situación 24 meses",SF.peorSituacion24Meses,String(p24),"1 o 2 (0-A)",false]],acciones:["No se resuelve con avalista: el rechazo por BCRA corta el proceso. Reemplazar al titular."]},`Clasificación 0-C (24 meses = ${p24}).`);
+      }
+      if(cl==="0-B"){esOB=true;sinHistorial.push(k);paso("warn","Situación vigente 0 · clasificación 0-B","Sin historial propio en 24 meses: requiere avalista.");bcraTxt="0-B: sin historial";}
+      else {paso("ok","Situación vigente 0 · clasificación 0-A",`Peor situación 24 meses = ${p24}.`);bcraTxt="0-A";}
+    } else {
+      const chk=[["Situación vigente",SF.peorSituacion,ps,"≤ 4",ps<=4],["Peor situación 6 meses",SF.peorSituacion6Meses,p6,"1 o 2",p6>0&&p6<=2],["Peor situación 12 meses",SF.peorSituacion12Meses,p12,"1 o 2",p12>0&&p12<=2],["Peor situación 24 meses",SF.peorSituacion24Meses,p24,"1 o 2",p24>0&&p24<=2]];
+      const malos=chk.filter(c=>!c[4]);
+      if(malos.length){
+        paso("bad","Situación BCRA",`Vigente ${ps} · 6m ${p6} · 12m ${p12} · 24m ${p24}. Se exige vigente ≤ 4 y 6/12/24 meses entre 1 y 2.`);
+        const desc=malos.map(c=>`${c[0].toLowerCase()} en <b>${c[2]===0?"0 (sin información)":c[2]}</b>`).join(", ");
+        const hayCero=malos.some(c=>c[2]===0);
+        return corta(R.BCRA,"Situación BCRA",{texto:`${quien(k)} tiene ${desc}. El árbol exige situación 1 o 2 en los períodos de 6, 12 y 24 meses${hayCero?"; un 0 en un período significa que no hay información y también rechaza (solo la situación <i>vigente</i> en 0 tiene tratamiento especial)":""}.`,
+          filas:chk.map(c=>[c[0],c[1],sitTxt(c[2]),c[3],c[4]]),acciones:["No se resuelve con avalista: el rechazo por BCRA corta el proceso. Reemplazar al titular."]},"Historial BCRA fuera de rango.");
+      }
+      paso("ok","Situación BCRA",`Vigente ${ps} · 6m ${p6} · 12m ${p12} · 24m ${p24}`);
+      bcraTxt=`situación ${ps}`;
+      if(ps>2){
+        const ents=entidades34(getStr(d,"detalleDelUltimoInformePorEntidad")), s34=ents.reduce((a,e)=>a+e.pct,0);
+        if(s34>20){
+          paso("bad","BCRA 3-4",`Deuda en situación 3-4: ${nf(s34)} % (máx. 20 %).`);
+          return corta(R.BCRA34,"BCRA 3-4",{texto:`${quien(k)} está en <b>situación ${ps}</b> y el <b>${nf(s34)} %</b> de su deuda está en entidades con situación 3 o 4. Se tolera hasta el 20 %.`,
+            filas:[["Situación vigente",SF.peorSituacion,String(ps),"≤ 2, o 3-4 con ≤ 20 % de deuda",null],["Deuda en situación 3-4",SF.detalleDelUltimoInformePorEntidad,nf(s34)+" %","≤ 20 %",false]].concat(ents.map(e=>[`↳ ${e.entidad||"Entidad"}`,"",`sit. ${e.sit} · ${nf(e.pct)} %`,"",null])),
+            acciones:[`Bajar la deuda en situación 3-4 al 20 % o menos (hoy sobran ${nf(s34-20)} puntos).`,"No se resuelve con avalista: el rechazo corta el proceso."]},`${nf(s34)} % de deuda en situación 3-4.`);
+        }
+        paso("ok","BCRA 3-4",`Deuda en situación 3-4: ${nf(s34)} % (máx. 20 %).`);
+      }
+    }
+    // Ingreso
+    let monto=0, cubre=false, det="";
+    if(!juridica){
+      const im=getDec(d,"nivelSocioeconomicoIngresoPromedio");
+      monto=im>0?im*cfg.p.MULTIPLICADOR_INGRESO:0;
+      det=`${fmt(im)} × ${nf(cfg.p.MULTIPLICADOR_INGRESO)}`;
+    } else {
+      const cat=getDec(d,CAMPO_FE);
+      if(cat<=0){det="Sin categoría de facturación: ingreso 0.";}
+      else{
+        const n=Math.trunc(cat), r=rangos[n]; P.fe=n;
+        if(!r){
+          paso("bad","Error de parametría",`No existe rango FE_${n}.`);
+          return corta(R.ERR,"Parametría",{texto:`La categoría de facturación de ${quien(k)} es <b>${cat}</b> y no existe el rango <b>FE_${n}</b> en HS_Parametro_Suscripcion__c. La clase lanza una excepción y devuelve error.`,
+            filas:[["Categoría facturación",SF[CAMPO_FE],String(cat),"FE_1 a FE_16",false]],acciones:["Revisar el dato de Nosis o cargar el rango faltante en el Custom Setting."]},`No existe FE_${n}.`);
+        }
+        if(r.promedio===null){cubre=true;det=`FE_${n}: tramo superior, cubre cualquier compromiso.`;}
+        else{monto=r.promedio*cfg.p.MULTIPLICADOR_INGRESO;det=`FE_${n}: ${fmt(r.promedio)} × ${nf(cfg.p.MULTIPLICADOR_INGRESO)}`;}
+      }
+    }
+    P.ingreso=monto; P.cubre=cubre; P.detIngreso=det; ingresos+=monto; cubreTodo=cubreTodo||cubre;
+    paso(cubre||monto>0?"ok":"warn","Ingreso computable "+(cubre?"(sin tope)":fmt(monto)),det);
+    P.estado=esOB?"warn":"ok";
+    cam(esOB?"warn":"ok",label,`${juridica?"Jurídica":"Física"} · BCRA ${bcraTxt} · ingreso ${cubre?"sin tope (FE_16)":fmt(monto)}.`);
+  }
+
+  // Cuota contra ingreso (se calcula siempre que todos los CUIT pasaron)
+  const cuota=total*factor;
+  const pe=getBool(input,"tieneExpensas")?cfg.p.PORCENTAJE_EXPENSAS:0;
+  const exp=cuota*pe, gar=cuota*cfg.p.PORCENTAJE_GARANTIA, comp=cuota+exp+gar;
+  let cc; if("centroComercial" in input) cc=getBool(input,"centroComercial"); else if("openMarket" in input) cc=!getBool(input,"openMarket"); else cc=variable>0;
+  const porc=cc?cfg.p.PORCENTAJE_CENTRO_COMERCIAL:cfg.p.PORCENTAJE_OPEN_MARKET;
+  const permitido=ingresos*porc;
+  // getBoolean de Apex solo reconoce true/"true": el "Si" que manda el Omniscript se lee como false
+  const expIgnorada=!getBool(input,"tieneExpensas")&&/^s[ií]$/i.test(getStr(input,"tieneExpensas"));
+  out.calc={total,factor,cuota,exp,gar,comp,ingresos,porc,cc,permitido,cubreTodo,expIgnorada};
+  const alqMax=permitido/(factor*(1+pe+cfg.p.PORCENTAJE_GARANTIA));
+  const faltante=Math.max(0,comp/porc-ingresos);
+  const filasIng=PERSONAS.filter(([k])=>out.personas[k]&&out.personas[k].estado!=="na").map(([k,l])=>[`Ingreso ${l}`,juridicaDe(out.personas[k])?SF[CAMPO_FE]:SF.nivelSocioeconomicoIngresoPromedio,out.personas[k].cubre?"sin tope":fmt(out.personas[k].ingreso),out.personas[k].detIngreso||"",null]);
+  const lblLocal=cc?"centro comercial":"open market";
+
+  const hayAval=AVALISTAS.some(a=>input[a]&&Object.keys(input[a]).length);
+  if(sinHistorial.length&&!hayAval){
+    out.calcInfo=true;
+    cam("bad","Avalista por falta de historial",`${sinHistorial.map(k=>PERSONAS.find(p=>p[0]===k)[1]).join(", ")} en 0-B y no hay avalista.`);
+    cam("skip","Cuota contra ingreso","No define el resultado; se muestra como referencia.");
+    const varios=sinHistorial.length>1;
+    const ent=cubreTodo||comp<=permitido;
+    const acciones=["Pegar el reporte de un Avalista 1 o Avalista 2 (Individuo__c) que pase todos los controles."];
+    if(cubreTodo) acciones.push("Con un avalista aprobado la validación saldría exitosa: hay un CUIT en el tramo superior de facturación.");
+    else if(ent) acciones.push(`Con los ingresos actuales el compromiso ya entra (usa el ${nf(comp/permitido*100)} % del permitido), así que con un avalista que apruebe los controles la validación saldría exitosa.`);
+    else acciones.push(`Además, el compromiso supera el ingreso permitido: el avalista debería sumar al menos ${fmt(faltante)} de ingreso computable.`);
+    return fin(R.AVAL,{regla:"Sin historial (0-B) · sin avalista",
+      texto:`${sinHistorial.map(quien).join(" y ")} ${varios?"tienen":"tiene"} situación vigente <b>0</b> y también <b>0 en los últimos 24 meses</b>: Nosis no registra deuda en el sistema financiero, así que no hay historial propio para evaluar (clasificación interna <b>0-B</b>). En ese caso la clase pide un avalista <b>antes</b> de comparar la cuota contra el ingreso, por eso el resultado no depende del monto del alquiler.`,
+      filas:[].concat(...sinHistorial.map(k=>{const dd=input[k].Datos,l=PERSONAS.find(p=>p[0]===k)[1];return [[`${l} · situación vigente`,SF.peorSituacion,sitTxt(getDec(dd,"peorSituacion")),"—",null],[`${l} · peor situación 24 meses`,SF.peorSituacion24Meses,sitTxt(getDec(dd,"peorSituacion24Meses")),"1 o 2 para ser 0-A",false]];}),[["Avalistas informados","Individuo__c = Avalista 1/2","ninguno","al menos uno",false]]),
+      acciones});
+  }
+  if(sinHistorial.length) cam("ok","Avalista por falta de historial","Hay CUIT en 0-B y se informó avalista.");
+  else cam("ok","Avalista por falta de historial","Ningún CUIT en 0-B; no hace falta.");
+
+  if(cubreTodo){
+    cam("ok","Cuota contra ingreso","Tramo superior de facturación: no se compara.");
+    return fin(R.OK,{regla:"Facturación tramo superior",texto:"Todos los CUIT pasaron los controles y al menos una persona jurídica está en la <b>categoría FE_16</b>, el tramo superior de la tabla. Ese tramo no tiene promedio y la clase lo toma como suficiente para cualquier compromiso.",
+      filas:filasIng.concat([["Compromiso mensual","",fmt(comp),"no se compara",null]]),acciones:[]});
+  }
+  const filasComp=[["Compromiso mensual","cuota + expensas + garantía",fmt(comp),"≤ "+fmt(permitido),comp<=permitido],["Ingreso computable total","",fmt(ingresos),"",null]].concat(filasIng).concat([["Ingreso permitido",`${pct(porc)} (${lblLocal})`,fmt(permitido),"",null]]);
+  if(comp<=permitido){
+    cam("ok","Cuota contra ingreso",`${fmt(comp)} ≤ ${fmt(permitido)}.`);
+    return fin(R.OK,{regla:"Cuota contra ingreso",
+      texto:`Todos los CUIT pasaron los controles de cheques, CUIT, tipo de persona y BCRA. El compromiso mensual (<b>${fmt(comp)}</b>) entra en el <b>${pct(porc)}</b> del ingreso computable (<b>${fmt(permitido)}</b>), con un margen de ${fmt(permitido-comp)}.`,
+      filas:filasComp,acciones:[`El alquiler total podría subir hasta ${fmt(alqMax)} sin cambiar el resultado.`]});
+  }
+  cam("bad","Cuota contra ingreso",`${fmt(comp)} > ${fmt(permitido)}.`);
+  return fin(R.AVAL,{regla:"Cuota contra ingreso",
+    texto:`Todos los CUIT pasaron los controles, pero el compromiso mensual (<b>${fmt(comp)}</b>) supera el <b>${pct(porc)}</b> del ingreso computable (<b>${fmt(permitido)}</b>). Faltan <b>${fmt(faltante)}</b> de ingreso computable para cubrirlo.`,
+    filas:filasComp,
+    acciones:[`Sumar un co-inquilino o avalista que aporte al menos ${fmt(faltante)} de ingreso computable (ingreso NSE × ${nf(cfg.p.MULTIPLICADOR_INGRESO)}, o promedio FE × ${nf(cfg.p.MULTIPLICADOR_INGRESO)}).`,`O bajar el alquiler total a ${fmt(alqMax)} o menos.`]});
+}
+function juridicaDe(P){ return P&&P.tipo==="JURIDICA"; }
+
+/* ---------- Lectura del JSON pegado ---------- */
+// forzar: pestaña de la tarjeta donde se pegó; ahí el registro va a esa persona aunque Individuo__c diga otra cosa
+function parsearReportes(txt,forzar){
+  const res={personas:{},msgs:[]};
+  if(!txt.trim()) return res;
+  let o; try{ o=JSON.parse(txt); }catch(e){ res.msgs.push({c:"bad",t:"El texto no es JSON válido: "+e.message}); return res; }
+  if(o&&!Array.isArray(o)&&Array.isArray(o.records)) o=o.records;
+  // Request Data del Action Debugger (inputMap que recibe HS_ValidacionCrediticia)
+  if(o&&!Array.isArray(o)&&PERSONAS.some(([k])=>o[k]&&typeof o[k]==="object"&&o[k].Datos)){
+    PERSONAS.forEach(([k])=>{ const n=o[k]; if(n&&typeof n==="object"&&n.Datos&&Object.keys(n.Datos).length){ const d=n.Datos; res.personas[k]={datos:{...d},nombre:d.razonSocial||d.apellidoNombre||d.denominacion||("CUIT "+fmtCuit(d.cuitCuilCdi))}; } });
+    res.op={alquilerFijo:o.alquilerFijo,alquilerVariable:o.alquilerVariable,formatoAlquiler:o.formatoAlquiler,incrementoSumaAsegurada:o.incrementoSumaAsegurada,tieneExpensas:o.tieneExpensas,centroComercial:getBool(o,"centroComercial")};
+    const n=Object.keys(res.personas).length;
+    res.msgs.push({c:"ok",t:`Request Data del Omniscript: ${n} persona${n>1?"s":""} (${PERSONAS.filter(p=>res.personas[p[0]]).map(p=>p[1]).join(", ")}) y datos de la solicitud cargados.`});
+    return res;
+  }
+  const regs=Array.isArray(o)?o:[o];
+  if(forzar&&regs.length!==1){ res.msgs.push({c:"bad",t:`En la tarjeta va un solo reporte y pegaste ${regs.length}. Para varios usá "Pegar varios reportes juntos".`}); return res; }
+  regs.forEach((reg,i)=>{
+    if(!reg||typeof reg!=="object"){ res.msgs.push({c:"bad",t:`Registro ${i+1}: no es un objeto.`}); return; }
+    const nombre=reg.Nombre_Compania__c||reg.Name||`Registro ${i+1}`;
+    const indTxt=String(reg.Individuo__c||"").trim();
+    let k=INDIVIDUO[indTxt.toLowerCase()];
+    if(forzar){
+      const lf=PERSONAS.find(p=>p[0]===forzar)[1];
+      if(indTxt&&k!==forzar) res.msgs.push({c:"warn",t:`El registro dice Individuo__c "${indTxt}"; se cargó como ${lf} porque lo pegaste en esa tarjeta.`});
+      k=forzar;
+    }
+    if(!k){
+      if(regs.length===1&&!indTxt){ k="inquilino1"; res.msgs.push({c:"warn",t:`${nombre}: sin Individuo__c, se tomó como Inquilino 1.`}); }
+      else { res.msgs.push({c:"bad",t:`${nombre}: Individuo__c "${indTxt||"vacío"}" no corresponde a Inquilino 1/2 ni Avalista 1/2.`}); return; }
+    }
+    if(res.personas[k]){ res.msgs.push({c:"bad",t:`${nombre}: ya hay otro registro como ${PERSONAS.find(p=>p[0]===k)[1]}; se ignora.`}); return; }
+    const datos={}; let respaldo=null;
+    Object.keys(reg).forEach(key=>{ const lk=key.toLowerCase(); if(MAPEO[lk]) datos[MAPEO[lk]]=reg[key]; if(lk===FE_RESPALDO) respaldo=reg[key]; });
+    if((datos[CAMPO_FE]==null||datos[CAMPO_FE]==="")&&respaldo!=null&&respaldo!=="") datos[CAMPO_FE]=respaldo;
+    const src=reg.Datos&&typeof reg.Datos==="object"?reg.Datos:null;
+    res.personas[k]={datos:src?{...src}:datos,nombre:src?(src.cuitCuilCdi||nombre):nombre};
+  });
+  const n=Object.keys(res.personas).length;
+  if(n) res.msgs.unshift({c:"ok",t:`${n} registro${n>1?"s":""} cargado${n>1?"s":""}: `+PERSONAS.filter(p=>res.personas[p[0]]).map(p=>p[1]).join(", ")+"."});
+  return res;
+}
+
+/* ---------- UI ---------- */
+let cfg=loadCfg();
+let parsed={personas:{},msgs:[]};
+const $=id=>document.getElementById(id);
+function loadCfg(){ try{const s=JSON.parse(localStorage.getItem("hs_vc_cfg")||"null"); if(s&&s.p&&s.fe) return s;}catch(e){} return {p:{...PARAMS_ORG},fe:FE_ORG.map(r=>r.slice())}; }
+function saveCfg(){ try{localStorage.setItem("hs_vc_cfg",JSON.stringify(cfg));}catch(e){} }
+/* Fórmulas del paso DatosCotizacion del Omniscript CAUCIONCOMERCIAL:
+   FormulaFactorIncremental = 0%→1, 10%→1.1, 20%→1.2, 30%→1.3
+   FormulaTopes             = IF(ValAlquilerMensual < 2600000, 2600000, 5000000)
+   ValAlquilerVariable      = IF(ValAlquilerMensual > 5000000, 0, 5000000 * factor)                      (formato Variable)
+   ValAlquilerFijoVariable  = IF(ValAlquilerMensual > 5000000, 0, FormulaTopes * factor - ValAlquilerMensual) (formato Fijo/Variable)
+   FormulaValAlquilerVariable = Fijo → 0 · Variable → ValAlquilerVariable · Fijo/Variable → ValAlquilerFijoVariable */
+function calcularVariable(formato,fijo,inc){
+  const factor={0:1,10:1.1,20:1.2,30:1.3}[inc]??0;
+  const topes=fijo<2600000?2600000:5000000;
+  if(formato==="Variable") return {variable:fijo>5000000?0:5000000*factor,formula:`5.000.000 × ${nf(factor)}`};
+  if(formato==="Fijo/Variable") return {variable:fijo>5000000?0:topes*factor-fijo,formula:`${fmt(topes)} × ${nf(factor)} − fijo`,topes};
+  return {variable:0,formula:""};
+}
+function readInput(){
+  const formato=$("formatoAlquiler").value, inc=Number($("incrementoSumaAsegurada").value||0);
+  const fijo=formato==="Variable"?0:Number($("alquilerFijo").value||0); // con formato Variable el campo fijo no se muestra
+  const v=calcularVariable(formato,fijo,inc);
+  const inp={alquilerFijo:fijo,alquilerVariable:v.variable,formatoAlquiler:formato,incrementoSumaAsegurada:inc,tieneExpensas:$("tieneExpensas").value==="si"?"Si":"No"}; // el Omniscript manda "Si"/"No" como texto
+  if($("ubicacion").value==="cc") inp.centroComercial=true; else inp.openMarket=true;
+  PERSONAS.forEach(([k])=>{ if(parsed.personas[k]) inp[k]={Datos:parsed.personas[k].datos}; });
+  return inp;
+}
+// Cruza los CUIT de la solicitud con los reportes pegados
+// Rango que admite la pantalla de solicitud del Omniscript (la clase solo controla el máximo)
+const ALQ_MIN=500000, ALQ_MAX=5000000;
+function controlarCuits(){
+  const m=[];
+  const fijo=$("formatoAlquiler").value==="Variable"?0:Number($("alquilerFijo").value||0);
+  if($("formatoAlquiler").value!=="Variable"&&$("alquilerFijo").value!==""&&fijo<ALQ_MIN) m.push({c:"bad",t:`El valor fijo del alquiler (${fmt(fijo)}) está por debajo del mínimo de ${fmt(ALQ_MIN)}: el Omniscript no permite cotizar con ese monto.`});
+  if(fijo>ALQ_MAX) m.push({c:"bad",t:`El valor fijo del alquiler (${fmt(fijo)}) supera el máximo de ${fmt(ALQ_MAX)}.`});
+  [["cuitInq1","inquilino1","Inquilino I"],["cuitInq2","inquilino2","Inquilino II"],["cuitAval1","avalista1","Avalista 1"],["cuitAval2","avalista2","Avalista 2"]].forEach(([id,k,l])=>{
+    const v=$(id).value.trim(), rep=parsed.personas[k], rc=rep?normCuit(rep.datos.cuitCuilCdi):"";
+    if(v&&!cuitValido(v)) m.push({c:"bad",t:`CUIT ${l} de la solicitud: dígito verificador o longitud incorrectos.`});
+    if(v&&rep&&normCuit(v)!==rc) m.push({c:"bad",t:`El CUIT ${l} de la solicitud (${fmtCuit(v)||v}) no coincide con el reporte pegado como ${PERSONAS.find(p=>p[0]===k)[1]} (${fmtCuit(rc)||rc||"sin CUIT"}).`});
+    if(v&&!rep) m.push({c:"warn",t:`Falta el reporte Nosis del CUIT ${l} (${fmtCuit(v)||v}).`});
+    if(!v&&rep&&k!=="inquilino1") m.push({c:"warn",t:`Hay un reporte de ${PERSONAS.find(p=>p[0]===k)[1]} pero la solicitud no tiene CUIT ${l}.`});
+    if(v&&rep&&normCuit(v)===rc) m.push({c:"ok",t:`CUIT ${l} coincide con el reporte (${rep.nombre}).`});
+  });
+  return m;
+}
+
+/* Tarjetas: la estructura (con su caja para pegar) se arma una vez; en cada recálculo solo se actualiza el contenido */
+const reemplazando={};
+function buildCards(){
+  $("people").innerHTML=PERSONAS.map(([k,l])=>`<div class="card" id="card-${k}">
+    <div id="info-${k}"></div>
+    <div class="paste" id="pa-${k}">
+      <textarea id="ta-${k}" spellcheck="false" rows="3" placeholder="Pegá acá el JSON del Reporte_Nosis__c de ${l}"></textarea>
+      <div class="row"><span class="msg" id="msg-${k}"></span><span class="row" style="gap:6px"><button class="btn small" type="button" data-cancelar="${k}" hidden>Cancelar</button><button class="btn small" type="button" data-cargar="${k}">Cargar</button></span></div>
+    </div>
+    <div class="row" id="acc-${k}" style="justify-content:flex-end;gap:6px"><button class="btn small" type="button" data-reemplazar="${k}">Reemplazar</button><button class="btn small" type="button" data-quitar="${k}">Quitar</button></div>
+  </div>`).join("");
+  PERSONAS.forEach(([k])=>$("ta-"+k).addEventListener("paste",()=>setTimeout(()=>cargarSlot(k),0)));
+  $("people").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return; const d=b.dataset;
+    if(d.cargar) cargarSlot(d.cargar);
+    else if(d.quitar){ delete parsed.personas[d.quitar]; $(CUIT_ID[d.quitar]).value=""; $("msg-"+d.quitar).textContent=""; run(); }
+    else if(d.reemplazar){ reemplazando[d.reemplazar]=true; run(); $("ta-"+d.reemplazar).focus(); }
+    else if(d.cancelar){ reemplazando[d.cancelar]=false; $("ta-"+d.cancelar).value=""; run(); }
+  });
+}
+function cargarSlot(k){
+  const ta=$("ta-"+k), msg=$("msg-"+k);
+  if(!ta.value.trim()){ msg.className="msg bad"; msg.textContent="Pegá el JSON del reporte."; return; }
+  const res=parsearReportes(ta.value,k);
+  if(res.op){ aplicarCarga(res); ta.value=""; reemplazando[k]=false; msg.textContent=""; return; }
+  const errores=res.msgs.filter(m=>m.c==="bad");
+  if(errores.length||!res.personas[k]){ msg.className="msg bad"; msg.textContent=(errores[0]||{t:"No se encontró un reporte en el texto."}).t; return; }
+  parsed.personas[k]=res.personas[k];
+  const aviso=res.msgs.find(m=>m.c==="warn");
+  msg.className="msg "+(aviso?"warn":"ok"); msg.textContent=aviso?aviso.t:"Reporte cargado.";
+  ta.value=""; reemplazando[k]=false;
+  $(CUIT_ID[k]).value=fmtCuit(res.personas[k].datos.cuitCuilCdi)||res.personas[k].datos.cuitCuilCdi||"";
+  run();
+}
+function renderCards(r){
+  PERSONAS.forEach(([k,l])=>{
+    const p=parsed.personas[k], P=r.personas[k], card=$("card-"+k);
+    const est=p&&P&&P.estado!=="na"?P.estado:"";
+    card.className="card"+(p?" "+est:" empty");
+    $("info-"+k).innerHTML=p?cardInfo(k,l,P):`<div class="rol">${l}</div><div class="hint">${k==="inquilino1"?"Obligatorio · sin reporte":"Opcional · sin reporte"}</div>`;
+    $("pa-"+k).hidden=!!p&&!reemplazando[k];
+    $("acc-"+k).hidden=!p||!!reemplazando[k];
+    card.querySelector("[data-cancelar]").hidden=!(p&&reemplazando[k]);
+  });
+}
+function cardInfo(k,label,P){
+  const p=parsed.personas[k];
+  const d=p.datos, est=P&&P.estado!=="na"?P.estado:"";
+  const cond=[["esEmpleador","Empleador"],["esAutonomo","Autónomo"],["esMonotributista","Monotributista"],["esEmpleado","Empleado"],["esRetirado","Retirado"],["esJubilado","Jubilado"]].filter(([f])=>indicador(d,f)).map(x=>x[1]).join(", ")||"Sin condición";
+  const cheq=contarD(d.ultimos30ChequesRechazados), s34=sumar34(getStr(d,"detalleDelUltimoInformePorEntidad"));
+  const cuitOk=cuitValido(d.cuitCuilCdi);
+  const juridica=indicador(d,"esEmpleador");
+  const chip={ok:["ok","Aprobado"],warn:["warn","Sin historial (0-B)"],bad:["bad","Rechazado"]}[est]||["","Sin evaluar"];
+  const sit=["peorSituacion","peorSituacion6Meses","peorSituacion12Meses","peorSituacion24Meses"].map(f=>getDec(d,f)).join(" · ");
+  return `<div class="top"><div><div class="rol">${label}</div><div class="who">${esc(p.nombre)}</div></div><span class="chip ${chip[0]}">${chip[1]}</span></div>
+    <dl class="kv">
+      <dt>CUIT</dt><dd class="${cuitOk?"":"bad"}">${esc(fmtCuit(d.cuitCuilCdi)||d.cuitCuilCdi||"—")}${cuitOk?"":" (inválido)"}</dd>
+      <dt>Condición</dt><dd>${cond}</dd>
+      <dt>Situación vig · 6 · 12 · 24</dt><dd>${sit}</dd>
+      <dt>Cheques rechazados</dt><dd class="${cheq?"bad":""}">${cheq}</dd>
+      ${s34?`<dt>Deuda sit. 3-4</dt><dd class="${s34>20?"bad":""}">${nf(s34)} %</dd>`:""}
+      ${juridica?`<dt>Categoría facturación</dt><dd>${getDec(d,CAMPO_FE)>0?"FE_"+Math.trunc(getDec(d,CAMPO_FE))+" de 16":"Sin dato"}</dd>`:`<dt>Ingreso NSE mensual</dt><dd>${getDec(d,"nivelSocioeconomicoIngresoPromedio")>0?fmt(getDec(d,"nivelSocioeconomicoIngresoPromedio")):"Sin dato"}</dd>`}
+    </dl>`;
+}
+
+function run(){
+  const nombres={}; PERSONAS.forEach(([k])=>{ if(parsed.personas[k]) nombres[k]=parsed.personas[k].nombre; });
+  let r; try{ r=evaluar(readInput(),cfg,nombres); }catch(e){ r={resultado:R.ERR,regla:"Error",texto:esc(e.message),filas:[],acciones:[],camino:[],personas:{},calc:null}; }
+  $("msgs").innerHTML=parsed.msgs.map(m=>`<div class="msg ${m.c}">${esc(m.t)}</div>`).join("");
+  $("opMsgs").innerHTML=controlarCuits().map(m=>`<div class="msg ${m.c}">${esc(m.t)}</div>`).join("");
+  { const formato=$("formatoAlquiler").value, inc=Number($("incrementoSumaAsegurada").value||0);
+    $("wrapVariable").hidden=formato==="Fijo"; $("wrapFijo").hidden=formato==="Variable";
+    const v=calcularVariable(formato,formato==="Variable"?0:Number($("alquilerFijo").value||0),inc);
+    $("alquilerVariable").value=formato==="Fijo"?"":fmt(v.variable); $("hintVariable").textContent=v.formula; }
+  renderCards(r);
+  // Dictamen y porqué
+  const cls=r.resultado===R.OK?"ok":r.resultado===R.AVAL?"warn":"bad";
+  $("verdict").className="verdict "+cls; $("res").textContent=r.resultado; $("why").innerHTML=r.texto;
+  $("regla").textContent=r.regla; $("regla").hidden=!r.regla;
+  $("factsWrap").hidden=!r.filas.length;
+  $("facts").innerHTML=r.filas.map(([dato,campo,valor,exige,ok])=>`<tr><td>${esc(dato)}${campo?`<span class="campo">${esc(campo)}</span>`:""}</td><td class="v ${ok===false?"bad":ok===true?"ok":""}">${esc(valor)}</td><td>${esc(exige)}</td></tr>`).join("");
+  $("todoWrap").hidden=!r.acciones.length;
+  $("todoLbl").textContent=r.resultado===R.OK?"Margen":"Qué cambiaría el resultado";
+  const avisos=r.calc&&r.calc.expIgnorada?[`Atención: el Omniscript manda tieneExpensas = "Si" y la clase solo reconoce true/"true", así que las expensas (${pct(cfg.p.PORCENTAJE_EXPENSAS)} de la cuota) no se suman al compromiso.`]:[];
+  if(r.calc&&$("formatoAlquiler").value!=="Fijo"&&r.calc.factor>1) avisos.push(`Para revisar: el alquiler variable calculado por el Omniscript ya incluye el factor de incremento (× ${nf(r.calc.factor)}) y la clase vuelve a multiplicar el alquiler total por ese factor al armar la cuota.`);
+  $("todoWrap").hidden=!(r.acciones.length+avisos.length);
+  $("todo").innerHTML=r.acciones.concat(avisos).map(a=>`<li>${esc(a)}</li>`).join("");
+  // Camino
+  const mk={ok:"✓",bad:"✕",warn:"!",skip:"–"};
+  $("path").innerHTML=r.camino.map(s=>`<li class="${s.c}"><span class="n" aria-hidden="true">${mk[s.c]}</span><div><div class="t">${esc(s.t)}</div>${s.s?`<div class="s">${esc(s.s)}</div>`:""}</div></li>`).join("");
+  // Cuota contra ingreso
+  const c=r.calc, t=$("calc"), bar=$("bar"), bt=$("barTxt"), tag=$("calcTag");
+  if(c){
+    tag.hidden=false; tag.className="chip"+(r.calcInfo?"":" "+(c.cubreTodo||c.comp<=c.permitido?"ok":"warn")); tag.textContent=r.calcInfo?"Solo referencia":(c.cubreTodo||c.comp<=c.permitido?"Entra":"No entra");
+    // Etapa de la tabla de facturación estimada de cada persona jurídica
+    const filasFE=PERSONAS.filter(([k])=>r.personas[k]&&r.personas[k].fe).map(([k,l])=>{
+      const n=r.personas[k].fe, row=cfg.fe.find(x=>x[0]===n)||[];
+      const rango=row[1]==null?`hasta ${fmt(row[2])}`:row[2]==null?`desde ${fmt(row[1])}`:`${fmt(row[1])} – ${fmt(row[2])}`;
+      return [`Facturación estimada · ${l}<span class="campo">${rango}${row[3]!=null?" · promedio "+fmt(row[3]):" · sin promedio"}</span>`,`FE_${n} de 16`];
+    });
+    t.innerHTML=[
+      ["Alquiler fijo + variable",fmt(c.total)],["Factor incremento","× "+nf(c.factor)],["Cuota alquiler",fmt(c.cuota)],
+      ["Expensas ("+pct(cfg.p.PORCENTAJE_EXPENSAS)+")",fmt(c.exp)],["Garantía ("+pct(cfg.p.PORCENTAJE_GARANTIA)+")",fmt(c.gar)],["Compromiso total",fmt(c.comp)]
+    ].concat(filasFE,[
+      ["Ingresos sumados",c.cubreTodo?"Sin tope (FE_16)":fmt(c.ingresos)],["Permitido ("+(c.cc?"centro comercial ":"open market ")+pct(c.porc)+")",c.cubreTodo?"—":fmt(c.permitido)]
+    ]).map(([a,b],i)=>`<tr class="${i===5?"tot":""}"><td>${a}</td><td>${b}</td></tr>`).join("");
+    // Resalta la etapa en la tabla de parametría
+    cfg.fe.forEach((x,i)=>{ const tr=$("fe-"+i).closest("tr"); tr.classList.toggle("fe-activo",filasFE.length>0&&PERSONAS.some(([k])=>r.personas[k]&&r.personas[k].fe===x[0])); });
+    const ratio=c.cubreTodo?0:(c.permitido>0?c.comp/c.permitido:Infinity);
+    bar.hidden=false; bar.className="bar"+(ratio>1?" over":""); bar.firstChild.style.width=Math.min(100,isFinite(ratio)?ratio*100:100)+"%";
+    bt.textContent=(r.calcInfo?"No definió el resultado. ":"")+(c.cubreTodo?"El tramo superior no se compara contra el compromiso.":(isFinite(ratio)?`El compromiso usa el ${nf(Math.round(ratio*1000)/10)} % del ingreso permitido.`:"No hay ingreso computable."));
+  } else { cfg.fe.forEach((x,i)=>$("fe-"+i).closest("tr").classList.remove("fe-activo")); tag.hidden=true; t.innerHTML=`<tr><td class="hint">Se calcula cuando todos los CUIT pasan los controles.</td><td></td></tr>`; bar.hidden=true; bt.textContent=""; }
+  // Detalle por CUIT
+  const mark={ok:"✓",bad:"✕",warn:"!"};
+  $("trace").innerHTML=PERSONAS.filter(([k])=>parsed.personas[k]||k==="inquilino1").map(([k,label])=>{
+    const P=r.personas[k];
+    if(!P||!P.pasos.length) return `<div><h3>${label}<span class="chip">no evaluado</span></h3><div class="hint">${parsed.personas[k]?"El proceso se detuvo antes de llegar a este CUIT.":"Sin datos."}</div></div>`;
+    return `<div><h3>${label}${nombres[k]?" · "+esc(nombres[k]):""}<span class="chip">${P.tipo==="JURIDICA"?"Jurídica":P.tipo==="FISICA"?"Física":P.tipo.toLowerCase()}</span></h3><ol>${P.pasos.map(p=>`<li class="${p.c}"><span class="m">${mark[p.c]}</span><span>${esc(p.t)}${p.s?`<small>${esc(p.s)}</small>`:""}</span></li>`).join("")}</ol></div>`;
+  }).join("");
+}
+
+const CUIT_ID={inquilino1:"cuitInq1",inquilino2:"cuitInq2",avalista1:"cuitAval1",avalista2:"cuitAval2"};
+// Suma a las tarjetas lo que trae un pegado múltiple (array o Request Data) sin borrar las demás
+function aplicarCarga(res){
+  if(res.op){ // Request Data: reemplaza todo con lo que mandó el Omniscript
+    parsed.personas={};
+    const op=res.op;
+    $("alquilerFijo").value=op.alquilerFijo??"";
+    $("formatoAlquiler").value=["Fijo","Fijo/Variable","Variable"].includes(op.formatoAlquiler)?op.formatoAlquiler:"Fijo";
+    $("incrementoSumaAsegurada").value=String(toDec(op.incrementoSumaAsegurada));
+    $("tieneExpensas").value=String(op.tieneExpensas).toLowerCase()==="no"||op.tieneExpensas===false?"no":"si";
+    $("ubicacion").value=op.centroComercial?"cc":"open";
+    Object.values(CUIT_ID).forEach(id=>$(id).value="");
+  }
+  Object.keys(res.personas).forEach(k=>{
+    parsed.personas[k]=res.personas[k]; reemplazando[k]=false;
+    $(CUIT_ID[k]).value=fmtCuit(res.personas[k].datos.cuitCuilCdi)||res.personas[k].datos.cuitCuilCdi||"";
+  });
+  parsed.msgs=res.msgs;
+  run();
+}
+function cargarTodos(){
+  const txt=$("json").value; if(!txt.trim()) return;
+  const res=parsearReportes(txt);
+  aplicarCarga(res);
+  if(Object.keys(res.personas).length) $("json").value="";
+}
+
+function buildParams(){
+  $("paramFields").innerHTML=Object.keys(PARAMS_ORG).map(k=>`<label class="f">${k}<input id="p-${k}" type="number" step="any" class="num" value="${cfg.p[k]}"></label>`).join("");
+  $("feBody").innerHTML=cfg.fe.map((r,i)=>`<tr><td class="ref">FE_${r[0]}</td><td class="num">${r[1]==null?"—":fmt(r[1])}</td><td class="num">${r[2]==null?"—":fmt(r[2])}</td><td><input id="fe-${i}" type="number" step="any" value="${r[3]==null?"":r[3]}" placeholder="sin valor"></td></tr>`).join("");
+  Object.keys(PARAMS_ORG).forEach(k=>$("p-"+k).oninput=e=>{cfg.p[k]=toDec(e.target.value);saveCfg();run();});
+  cfg.fe.forEach((r,i)=>$("fe-"+i).oninput=e=>{r[3]=e.target.value===""?null:Number(e.target.value);saveCfg();run();});
+}
+
+function limpiar(){
+  ["cuitInq1","cuitInq2","cuitAval1","cuitAval2","alquilerFijo","provincia","m2","json"].forEach(id=>$(id).value="");
+  $("incrementoSumaAsegurada").value="0";
+  $("formatoAlquiler").value="Fijo"; $("tieneExpensas").value="si"; $("ubicacion").value="open"; $("duracion").value="12 meses";
+  parsed={personas:{},msgs:[]};
+  PERSONAS.forEach(([k])=>{ $("ta-"+k).value=""; $("msg-"+k).textContent=""; reemplazando[k]=false; });
+  run();
+}
+
+buildParams(); buildCards(); limpiar();
+$("btnCargarTodos").onclick=cargarTodos;
+$("json").addEventListener("paste",()=>setTimeout(cargarTodos,0));
+document.querySelector("#h-op").closest("section").addEventListener("input",run);
+document.querySelector("#h-op").closest("section").addEventListener("change",run);
+$("btnLimpiar").onclick=limpiar;
+$("btnResetParams").onclick=()=>{cfg={p:{...PARAMS_ORG},fe:FE_ORG.map(r=>r.slice())};saveCfg();buildParams();run();};
+})();
+</script>
+
+</body>
+</html>
