@@ -279,7 +279,8 @@ const INDIVIDUO={"inquilino 1":"inquilino1","inquilino 2":"inquilino2","avalista
 function toDec(v){ if(v===null||v===undefined) return 0; const s=String(v).trim(); if(s===""||s==="null") return 0; const n=Number(s.replace(",",".")); return isFinite(n)?n:0; }
 function getStr(o,k){ if(!o||o[k]===undefined||o[k]===null) return ""; const s=String(o[k]).trim(); return s==="null"?"":s; }
 function getDec(o,k){ return (!o||!(k in o))?0:toDec(o[k]); }
-function getBool(o,k){ if(!o||o[k]==null) return false; const v=o[k]; return typeof v==="boolean"?v:String(v).toLowerCase()==="true"; }
+// Igual que getBoolean de la clase: true, "true" o "si" (sin tilde; "Sí" no lo toma equalsIgnoreCase)
+function getBool(o,k){ if(!o||o[k]==null) return false; const v=o[k]; if(typeof v==="boolean") return v; const s=String(v).toLowerCase(); return s==="true"||s==="si"; }
 function indicador(o,k){ if(!o||o[k]==null) return false; const v=o[k]; if(typeof v==="boolean") return v; const s=String(v).trim().toLowerCase(); return s==="si"||s==="true"||s==="1"; }
 function normCuit(c){ return c?String(c).replace(/[^0-9]/g,""):""; }
 function fmtCuit(c){ return normCuit(c).replace(/^(\d{2})(\d{8})(\d)$/,"$1-$2-$3"); }
@@ -463,7 +464,7 @@ function evaluar(input,cfg,nombres){
   const porc=cc?cfg.p.PORCENTAJE_CENTRO_COMERCIAL:cfg.p.PORCENTAJE_OPEN_MARKET;
   const permitido=ingresos*porc;
   // getBoolean de Apex solo reconoce true/"true": el "Si" que manda el Omniscript se lee como false
-  const expIgnorada=!getBool(input,"tieneExpensas")&&/^s[ií]$/i.test(getStr(input,"tieneExpensas"));
+  const expIgnorada=!getBool(input,"tieneExpensas")&&/^sí$/i.test(getStr(input,"tieneExpensas"));
   out.calc={total,factor,cuota,exp,gar,comp,ingresos,porc,cc,permitido,cubreTodo,expIgnorada};
   const alqMax=permitido/(factor*(1+pe+cfg.p.PORCENTAJE_GARANTIA));
   const faltante=Math.max(0,comp/porc-ingresos);
