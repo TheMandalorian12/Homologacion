@@ -283,6 +283,17 @@ function getBool(o,k){ if(!o||o[k]==null) return false; const v=o[k]; return typ
 function indicador(o,k){ if(!o||o[k]==null) return false; const v=o[k]; if(typeof v==="boolean") return v; const s=String(v).trim().toLowerCase(); return s==="si"||s==="true"||s==="1"; }
 function normCuit(c){ return c?String(c).replace(/[^0-9]/g,""):""; }
 function fmtCuit(c){ return normCuit(c).replace(/^(\d{2})(\d{8})(\d)$/,"$1-$2-$3"); }
+// Nombre a mostrar: respuesta Nosis (razonSocial) o registro Reporte_Nosis__c (compañía, apellido + nombre, Name sin el CUIT)
+function nombreDe(d,reg){
+  const t=v=>v==null?"":String(v).trim();
+  if(d){ const n=t(d.razonSocial)||t(d.razonSocialNombre)||t(d.apellidoNombre)||t(d.denominacion); if(n) return n; }
+  if(reg){
+    const n=t(reg.Nombre_Compania__c)||[t(reg.Apellido__c),t(reg.Nombre__c)].filter(Boolean).join(" ")||t(reg.Name).replace(/\s*-\s*\d{11}\s*$/,"");
+    if(n) return n;
+  }
+  const c=(d&&d.cuitCuilCdi)||(reg&&reg.CUIT_CUIL__c);
+  return c?"CUIT "+fmtCuit(c):"";
+}
 function dvCuit(n){ const m=[5,4,3,2,7,6,5,4,3,2]; let s=0; for(let i=0;i<10;i++) s+=Number(n[i])*m[i]; let d=11-(s%11); if(d===11) d=0; else if(d===10) d=9; return d; }
 function cuitValido(c){ const n=normCuit(c); return n.length===11&&dvCuit(n)===Number(n[10]); }
 function tipoPersona(d){
@@ -507,7 +518,7 @@ function parsearReportes(txt,forzar){
   if(o&&!Array.isArray(o)&&Array.isArray(o.records)) o=o.records;
   // Request Data del Action Debugger (inputMap que recibe HS_ValidacionCrediticia)
   if(o&&!Array.isArray(o)&&PERSONAS.some(([k])=>o[k]&&typeof o[k]==="object"&&o[k].Datos)){
-    PERSONAS.forEach(([k])=>{ const n=o[k]; if(n&&typeof n==="object"&&n.Datos&&Object.keys(n.Datos).length){ const d=n.Datos; res.personas[k]={datos:{...d},nombre:d.razonSocial||d.apellidoNombre||d.denominacion||("CUIT "+fmtCuit(d.cuitCuilCdi))}; } });
+    PERSONAS.forEach(([k])=>{ const n=o[k]; if(n&&typeof n==="object"&&n.Datos&&Object.keys(n.Datos).length){ const d=n.Datos; res.personas[k]={datos:{...d},nombre:nombreDe(d)}; } });
     res.op={alquilerFijo:o.alquilerFijo,alquilerVariable:o.alquilerVariable,formatoAlquiler:o.formatoAlquiler,incrementoSumaAsegurada:o.incrementoSumaAsegurada,tieneExpensas:o.tieneExpensas,centroComercial:getBool(o,"centroComercial")};
     const n=Object.keys(res.personas).length;
     res.msgs.push({c:"ok",t:`Request Data del Omniscript: ${n} persona${n>1?"s":""} (${PERSONAS.filter(p=>res.personas[p[0]]).map(p=>p[1]).join(", ")}) y datos de la solicitud cargados.`});
@@ -517,7 +528,7 @@ function parsearReportes(txt,forzar){
   if(forzar&&regs.length!==1){ res.msgs.push({c:"bad",t:`En la tarjeta va un solo reporte y pegaste ${regs.length}. Para varios usá "Pegar varios reportes juntos".`}); return res; }
   regs.forEach((reg,i)=>{
     if(!reg||typeof reg!=="object"){ res.msgs.push({c:"bad",t:`Registro ${i+1}: no es un objeto.`}); return; }
-    const nombre=reg.Nombre_Compania__c||reg.Name||`Registro ${i+1}`;
+    const nombre=nombreDe(reg.Datos&&typeof reg.Datos==="object"?reg.Datos:null,reg)||`Registro ${i+1}`;
     const indTxt=String(reg.Individuo__c||"").trim();
     let k=INDIVIDUO[indTxt.toLowerCase()];
     if(forzar){
@@ -534,7 +545,7 @@ function parsearReportes(txt,forzar){
     Object.keys(reg).forEach(key=>{ const lk=key.toLowerCase(); if(MAPEO[lk]) datos[MAPEO[lk]]=reg[key]; if(lk===FE_RESPALDO) respaldo=reg[key]; });
     if((datos[CAMPO_FE]==null||datos[CAMPO_FE]==="")&&respaldo!=null&&respaldo!=="") datos[CAMPO_FE]=respaldo;
     const src=reg.Datos&&typeof reg.Datos==="object"?reg.Datos:null;
-    res.personas[k]={datos:src?{...src}:datos,nombre:src?(src.cuitCuilCdi||nombre):nombre};
+    res.personas[k]={datos:src?{...src}:datos,nombre};
   });
   const n=Object.keys(res.personas).length;
   if(n) res.msgs.unshift({c:"ok",t:`${n} registro${n>1?"s":""} cargado${n>1?"s":""}: `+PERSONAS.filter(p=>res.personas[p[0]]).map(p=>p[1]).join(", ")+"."});
