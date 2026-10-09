@@ -1,9 +1,5 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style><title>Validación Crediticia Caución</title>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Validación Crediticia Caución</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -136,12 +132,13 @@ table.calc .campo{display:block;font-family:var(--f-mono);font-size:11px;color:v
 .params th,.params td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
 .params td input{padding:4px 6px;font-size:12.5px;font-family:var(--f-mono)}
 .scroll{overflow-x:auto}
-.note{font-size:12.5px;background:var(--accent-soft);border-radius:6px;padding:10px 12px}
+.sellos-t td input,.sellos-t td select{min-width:84px;padding:4px 6px;font-size:12.5px}
+.sellos-t td select{font-family:var(--f-body)}
+.sellos-t tr.sel-activo td{background:var(--accent-soft)}
+.sellos-t td.obs{font-size:11.5px;color:var(--muted);min-width:160px}.note{font-size:12.5px;background:var(--accent-soft);border-radius:6px;padding:10px 12px}
 .note b{font-weight:600}
 </style>
 
-</head>
-<body>
 <div class="wrap">
   <header>
     <div>
@@ -196,9 +193,14 @@ table.calc .campo{display:block;font-family:var(--f-mono);font-size:11px;color:v
 
       <section class="box" aria-labelledby="h-cot">
         <div class="row" style="margin-bottom:12px"><h2 id="h-cot" style="margin:0">Cotización · plan CAUCION</h2><span class="hint">Hoja P_CaucionComercial (parametría v6)</span></div>
-        <div class="fields" style="margin-bottom:12px"><label class="f">Sellos (%)<input id="sellos" type="number" step="0.01" min="0" class="num"><span class="hint" id="sellosHint"></span></label></div>
+        <div class="fields" style="margin-bottom:12px">
+          <label class="f">Sellos (%) <span class="hint">ramo 22</span><input id="sellos" type="number" step="0.01" min="0" class="num"><span class="hint" id="sellosHint"></span></label>
+          <label class="f" id="wrapTomJur" hidden>Tomador
+            <span class="checks" style="padding:7px 0"><input type="checkbox" id="tomadorJur"> Persona jurídica</span><span class="hint" id="tomHint"></span></label>
+        </div>
         <div class="scroll"><table class="calc" id="cot"></table></div>
         <p class="hint" id="cotHint" style="margin:8px 0 0"></p>
+        <div class="note" id="sellosIncendio" style="margin-top:10px" hidden></div>
       </section>
 
       <section class="box">
@@ -213,7 +215,12 @@ table.calc .campo{display:block;font-family:var(--f-mono);font-size:11px;color:v
           <div class="fields" id="paramFields"></div>
           <h2 style="margin-top:16px">Tabla de facturación estimada (mensual)</h2>
           <div class="scroll"><table><thead><tr><th>Rango</th><th>Mínimo</th><th>Máximo</th><th>Valor (promedio)</th></tr></thead><tbody id="feBody"></tbody></table></div>
-          <div class="row" style="margin-top:10px"><span class="hint">FE_16 sin valor = cubre cualquier compromiso.</span><button class="btn" type="button" id="btnResetParams">Restaurar valores de la org</button></div>
+          <p class="hint" style="margin:8px 0 0">FE_16 sin valor = cubre cualquier compromiso.</p>
+          <div class="row" style="margin-top:16px;margin-bottom:8px"><h2 style="margin:0">Impuesto de sellos por provincia · BHN Seguros Generales</h2><button class="btn small" type="button" id="btnCopiarSellos">Copiar tabla (JSON)</button></div>
+          <div class="seg" id="segRamo" role="group" aria-label="Ramo" style="margin-bottom:8px"><button type="button" data-ramo="22" aria-pressed="true">Ramo 22 · Caución</button><button type="button" data-ramo="1" aria-pressed="false">Ramo 1 · Incendio</button></div>
+          <div class="scroll"><table class="sellos-t"><thead id="sellosHead"></thead><tbody id="sellosBody"></tbody></table></div>
+          <p class="hint" id="sellosNota" style="margin:8px 0 0"></p>
+          <div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" type="button" id="btnResetParams">Restaurar valores de la org</button></div>
         </details>
       </section>
     </div>
@@ -279,22 +286,10 @@ const INDIVIDUO={"inquilino 1":"inquilino1","inquilino 2":"inquilino2","avalista
 function toDec(v){ if(v===null||v===undefined) return 0; const s=String(v).trim(); if(s===""||s==="null") return 0; const n=Number(s.replace(",",".")); return isFinite(n)?n:0; }
 function getStr(o,k){ if(!o||o[k]===undefined||o[k]===null) return ""; const s=String(o[k]).trim(); return s==="null"?"":s; }
 function getDec(o,k){ return (!o||!(k in o))?0:toDec(o[k]); }
-// Igual que getBoolean de la clase: true, "true" o "si" (sin tilde; "Sí" no lo toma equalsIgnoreCase)
-function getBool(o,k){ if(!o||o[k]==null) return false; const v=o[k]; if(typeof v==="boolean") return v; const s=String(v).toLowerCase(); return s==="true"||s==="si"; }
+function getBool(o,k){ if(!o||o[k]==null) return false; const v=o[k]; return typeof v==="boolean"?v:String(v).toLowerCase()==="true"; }
 function indicador(o,k){ if(!o||o[k]==null) return false; const v=o[k]; if(typeof v==="boolean") return v; const s=String(v).trim().toLowerCase(); return s==="si"||s==="true"||s==="1"; }
 function normCuit(c){ return c?String(c).replace(/[^0-9]/g,""):""; }
 function fmtCuit(c){ return normCuit(c).replace(/^(\d{2})(\d{8})(\d)$/,"$1-$2-$3"); }
-// Nombre a mostrar: respuesta Nosis (razonSocial) o registro Reporte_Nosis__c (compañía, apellido + nombre, Name sin el CUIT)
-function nombreDe(d,reg){
-  const t=v=>v==null?"":String(v).trim();
-  if(d){ const n=t(d.razonSocial)||t(d.razonSocialNombre)||t(d.apellidoNombre)||t(d.denominacion); if(n) return n; }
-  if(reg){
-    const n=t(reg.Nombre_Compania__c)||[t(reg.Apellido__c),t(reg.Nombre__c)].filter(Boolean).join(" ")||t(reg.Name).replace(/\s*-\s*\d{11}\s*$/,"");
-    if(n) return n;
-  }
-  const c=(d&&d.cuitCuilCdi)||(reg&&reg.CUIT_CUIL__c);
-  return c?"CUIT "+fmtCuit(c):"";
-}
 function dvCuit(n){ const m=[5,4,3,2,7,6,5,4,3,2]; let s=0; for(let i=0;i<10;i++) s+=Number(n[i])*m[i]; let d=11-(s%11); if(d===11) d=0; else if(d===10) d=9; return d; }
 function cuitValido(c){ const n=normCuit(c); return n.length===11&&dvCuit(n)===Number(n[10]); }
 function tipoPersona(d){
@@ -464,7 +459,7 @@ function evaluar(input,cfg,nombres){
   const porc=cc?cfg.p.PORCENTAJE_CENTRO_COMERCIAL:cfg.p.PORCENTAJE_OPEN_MARKET;
   const permitido=ingresos*porc;
   // getBoolean de Apex solo reconoce true/"true": el "Si" que manda el Omniscript se lee como false
-  const expIgnorada=!getBool(input,"tieneExpensas")&&/^sí$/i.test(getStr(input,"tieneExpensas"));
+  const expIgnorada=!getBool(input,"tieneExpensas")&&/^s[ií]$/i.test(getStr(input,"tieneExpensas"));
   out.calc={total,factor,cuota,exp,gar,comp,ingresos,porc,cc,permitido,cubreTodo,expIgnorada};
   const alqMax=permitido/(factor*(1+pe+cfg.p.PORCENTAJE_GARANTIA));
   const faltante=Math.max(0,comp/porc-ingresos);
@@ -519,7 +514,7 @@ function parsearReportes(txt,forzar){
   if(o&&!Array.isArray(o)&&Array.isArray(o.records)) o=o.records;
   // Request Data del Action Debugger (inputMap que recibe HS_ValidacionCrediticia)
   if(o&&!Array.isArray(o)&&PERSONAS.some(([k])=>o[k]&&typeof o[k]==="object"&&o[k].Datos)){
-    PERSONAS.forEach(([k])=>{ const n=o[k]; if(n&&typeof n==="object"&&n.Datos&&Object.keys(n.Datos).length){ const d=n.Datos; res.personas[k]={datos:{...d},nombre:nombreDe(d)}; } });
+    PERSONAS.forEach(([k])=>{ const n=o[k]; if(n&&typeof n==="object"&&n.Datos&&Object.keys(n.Datos).length){ const d=n.Datos; res.personas[k]={datos:{...d},nombre:d.razonSocial||d.apellidoNombre||d.denominacion||("CUIT "+fmtCuit(d.cuitCuilCdi))}; } });
     res.op={alquilerFijo:o.alquilerFijo,alquilerVariable:o.alquilerVariable,formatoAlquiler:o.formatoAlquiler,incrementoSumaAsegurada:o.incrementoSumaAsegurada,tieneExpensas:o.tieneExpensas,centroComercial:getBool(o,"centroComercial")};
     const n=Object.keys(res.personas).length;
     res.msgs.push({c:"ok",t:`Request Data del Omniscript: ${n} persona${n>1?"s":""} (${PERSONAS.filter(p=>res.personas[p[0]]).map(p=>p[1]).join(", ")}) y datos de la solicitud cargados.`});
@@ -529,7 +524,7 @@ function parsearReportes(txt,forzar){
   if(forzar&&regs.length!==1){ res.msgs.push({c:"bad",t:`En la tarjeta va un solo reporte y pegaste ${regs.length}. Para varios usá "Pegar varios reportes juntos".`}); return res; }
   regs.forEach((reg,i)=>{
     if(!reg||typeof reg!=="object"){ res.msgs.push({c:"bad",t:`Registro ${i+1}: no es un objeto.`}); return; }
-    const nombre=nombreDe(reg.Datos&&typeof reg.Datos==="object"?reg.Datos:null,reg)||`Registro ${i+1}`;
+    const nombre=reg.Nombre_Compania__c||reg.Name||`Registro ${i+1}`;
     const indTxt=String(reg.Individuo__c||"").trim();
     let k=INDIVIDUO[indTxt.toLowerCase()];
     if(forzar){
@@ -546,7 +541,7 @@ function parsearReportes(txt,forzar){
     Object.keys(reg).forEach(key=>{ const lk=key.toLowerCase(); if(MAPEO[lk]) datos[MAPEO[lk]]=reg[key]; if(lk===FE_RESPALDO) respaldo=reg[key]; });
     if((datos[CAMPO_FE]==null||datos[CAMPO_FE]==="")&&respaldo!=null&&respaldo!=="") datos[CAMPO_FE]=respaldo;
     const src=reg.Datos&&typeof reg.Datos==="object"?reg.Datos:null;
-    res.personas[k]={datos:src?{...src}:datos,nombre};
+    res.personas[k]={datos:src?{...src}:datos,nombre:src?(src.cuitCuilCdi||nombre):nombre};
   });
   const n=Object.keys(res.personas).length;
   if(n) res.msgs.unshift({c:"ok",t:`${n} registro${n>1?"s":""} cargado${n>1?"s":""}: `+PERSONAS.filter(p=>res.personas[p[0]]).map(p=>p[1]).join(", ")+"."});
@@ -554,11 +549,35 @@ function parsearReportes(txt,forzar){
 }
 
 /* ---------- UI ---------- */
-let cfg=loadCfg();
+let cfg; // se carga después de definir la tabla de sellos
 let parsed={personas:{},msgs:[]};
 const $=id=>document.getElementById(id);
-function loadCfg(){ try{const s=JSON.parse(localStorage.getItem("hs_vc_cfg")||"null"); if(s&&s.p&&s.fe) return s;}catch(e){} return {p:{...PARAMS_ORG},fe:FE_ORG.map(r=>r.slice())}; }
+/* ---------- Impuesto de sellos para BHN Seguros Generales S.A. ----------
+   Por ramo: 22 = Caución (el que usa este plan), 1 = Incendio (se guarda para cotizar otros planes).
+   g: gravado · b: base imponible ("prima" = prima de tarifa, "premio" = prima + IVA + SSN + OSSEG, sin los sellos)
+   a: alícuota % · min: impuesto mínimo · umb: no aplica si la base es menor · minP: mínimo PROCREAR · jur: solo tomador persona jurídica
+   Ramo 22: tabla con las modificaciones 2025. Las modificaciones 2026 se publicaron para los ramos
+   1-2-3-9-17-10-18-19-20-21 (sin el 22), así que solo se aplican al ramo 1. */
+const SELLOS_BASE=[
+ ["BUENOS AIRES","premio",1.2],["CAPITAL FEDERAL","prima",1,{jur:true,obs:"Solo alcanza a los seguros en que el tomador sea una persona jurídica."}],
+ ["CATAMARCA","prima",0],["CHACO","premio",1.5,{umb:1600,obs:"No aplica para premios menores a $ 1.600."}],["CHUBUT","premio",1.2],
+ ["CORDOBA","prima",1],["CORRIENTES","prima",1.5],["ENTRE RIOS","premio",1],["FORMOSA","prima",1],["JUJUY","premio",1],
+ ["LA PAMPA","premio",1.5,{min:635}],["LA RIOJA","premio",1,{min:1700}],["MENDOZA","prima",1.25],["MISIONES","prima",1.5],
+ ["NEUQUEN","prima",1.4,{min:5100}],["RIO NEGRO","prima",1,{umb:23400,obs:"Mínimo exento: no aplica para prima menor a $ 23.400."}],
+ ["SALTA","prima",1.2,{min:340}],["SAN JUAN","premio",1.3,{min:2800}],["SAN LUIS","prima",0.6],
+ ["SANTA CRUZ","premio",1.4,{umb:499,obs:"No aplica para premios menores a $ 499."}],["SANTIAGO DEL ESTERO","prima",1],["SANTA FE","prima",0.5],
+ ["TIERRA DEL FUEGO","",null,{obs:"Exento."}],["TUCUMAN","prima",2]
+];
+const MOD_2026={"LA PAMPA":{min:825,minP:412.5},"MENDOZA":{a:1},"LA RIOJA":{min:2300,minP:1150},"SALTA":{min:480,minP:240},
+ "SAN JUAN":{min:2400,minP:1200},"RIO NEGRO":{umb:29250,obs:"Mínimo exento: no aplica para prima menor a $ 29.250."},"NEUQUEN":{min:6630,minP:3315}};
+function sellosOrg(){
+  const fila=([p,b,a,x],mod)=>Object.assign({p,g:!!b,b:b||"prima",a:a,min:null,umb:null,minP:null,jur:false,obs:""},x||{},mod||{});
+  return {"22":SELLOS_BASE.map(r=>fila(r)),"1":SELLOS_BASE.map(r=>fila(r,MOD_2026[r[0]]))};
+}
+const RAMOS={"22":"Ramo 22 · Caución","1":"Ramo 1 · Incendio"};
+function loadCfg(){ try{const s=JSON.parse(localStorage.getItem("hs_vc_cfg")||"null"); if(s&&s.p&&s.fe){ if(!s.sellos||!s.sellos["22"]||!s.sellos["1"]) s.sellos=sellosOrg(); return s; }}catch(e){} return {p:{...PARAMS_ORG},fe:FE_ORG.map(r=>r.slice()),sellos:sellosOrg()}; }
 function saveCfg(){ try{localStorage.setItem("hs_vc_cfg",JSON.stringify(cfg));}catch(e){} }
+cfg=loadCfg();
 /* Fórmulas del paso DatosCotizacion del Omniscript CAUCIONCOMERCIAL:
    FormulaFactorIncremental = 0%→1, 10%→1.1, 20%→1.2, 30%→1.3
    FormulaTopes             = IF(ValAlquilerMensual < 2600000, 2600000, 5000000)
@@ -592,16 +611,45 @@ function readInput(){ return buildInput(readOp()); }
    005 Ocupación indeb. = base × 3/plazo
    TPP = 3,5 % × (1 − gastos 20 % − 30 %) · Prima tarifa = prima pura / (1 − 50 %)
    Premio = prima tarifa × (1 + IVA 21 % + SSN 0,6 % + OSSEG 0,5 % + sellos)
-   Sellos: CAPITAL FEDERAL 1 % verificado contra cotizaciones del Omniscript; el resto se carga a mano. */
+   Sellos: tabla de la provincia, ramo 22 (alícuota, base prima o premio, mínimo y umbral). CAPITAL FEDERAL 1 % sobre prima verificado contra el Omniscript. */
 const COT={tpp:0.035*(1-0.2-0.3),gastos:0.2+0.3,iva:0.21,ssn:0.006,osseg:0.005,expOM:0.2,expCC:0.3,servicios:0.2};
-const SELLOS={"CAPITAL FEDERAL":1};
-let sellosManual=false;
+const f2=v=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
+let sellosManual=false, tomManual=false;
+const reglaSellos=(ramo,prov)=>(cfg.sellos[ramo]||[]).find(x=>x.p===prov)||null;
+function descRegla(r){
+  if(!r.g) return "Exento";
+  const partes=[`${nf(r.a||0)} % sobre ${r.b}`];
+  if(r.min) partes.push(`mínimo ${f2(r.min)}`);
+  if(r.minP) partes.push(`mínimo PROCREAR ${f2(r.minP)}`);
+  if(r.umb) partes.push(`no aplica si ${r.b==="premio"?"el premio":"la prima"} es menor a ${f2(r.umb)}`);
+  if(r.jur) partes.push("solo tomador persona jurídica");
+  return partes.join(" · ");
+}
+// tasa en tanto por uno; prima = prima de tarifa; premioSin = prima + IVA + SSN + OSSEG
+function calcSellos(r,tasa,prima,premioSin,tomJur){
+  if(!r) return {monto:prima*tasa,txt:tasa?`${nf(tasa*100)} % sobre prima`:"sin dato"};
+  if(!r.g) return {monto:0,txt:"provincia exenta"};
+  if(r.jur&&!tomJur) return {monto:0,txt:"no alcanza: tomador persona física"};
+  const base=r.b==="premio"?premioSin:prima, lb=r.b==="premio"?"premio sin sellos":"prima";
+  if(r.umb&&base<r.umb) return {monto:0,txt:`no aplica: ${lb} ${f2(base)} menor a ${f2(r.umb)}`};
+  let monto=base*tasa, txt=`${nf(tasa*100)} % sobre ${lb}`;
+  if(r.min&&monto<r.min){ txt+=` · ${f2(monto)} < mínimo, se cobra ${f2(r.min)}`; monto=r.min; }
+  return {monto,txt};
+}
 function renderCotizacion(){
   const op=readOp(), meses=parseInt($("duracion").value,10)||12;
   const fijo=op.formato==="Variable"?0:op.fijo, alq=fijo+calcularVariable(op.formato,fijo,op.inc).variable;
-  const prov=$("provincia").value;
-  if(!sellosManual) $("sellos").value=prov in SELLOS?SELLOS[prov]:"";
-  $("sellosHint").textContent=prov in SELLOS&&!sellosManual?`${prov}: verificado`:(prov?"Sin dato para esta provincia: cargalo a mano":"");
+  const prov=$("provincia").value, regla=prov?reglaSellos("22",prov):null;
+  if(!sellosManual) $("sellos").value=regla?(regla.g?regla.a:0):"";
+  $("sellosHint").textContent=regla?(sellosManual?`Alícuota manual · tabla: ${regla.g?nf(regla.a)+" %":"exento"}`:descRegla(regla)):(prov?"Sin dato para esta provincia: cargalo a mano":"Elegí la provincia en los datos de la solicitud");
+  // Tomador (CABA solo grava persona jurídica): se toma del reporte de Inquilino 1 salvo que se cambie a mano
+  const inq=parsed.personas.inquilino1, auto=inq?tipoPersona(inq.datos)==="JURIDICA":true;
+  if(!tomManual) $("tomadorJur").checked=auto;
+  $("wrapTomJur").hidden=!(regla&&regla.jur);
+  $("tomHint").textContent=tomManual?"Cambiado a mano":(inq?`Según el reporte de Inquilino 1 (${auto?"empleador":"no es empleador"})`:"Sin reporte de Inquilino 1: se asume jurídica");
+  const r1=prov?reglaSellos("1",prov):null;
+  $("sellosIncendio").hidden=!r1;
+  if(r1) $("sellosIncendio").innerHTML=`<b>Sellos incendio (ramo 1) en ${esc(r1.p)}:</b> ${esc(descRegla(r1))}. Guardado para cotizar otros planes.`;
   if(!(alq>0)){ $("cot").innerHTML=`<tr><td class="hint">Cargá el valor del alquiler para ver la cotización.</td><td></td></tr>`; $("cotHint").textContent=""; return; }
   const base=alq*meses*(1+op.inc/100);
   const relExp=op.exp==="si"?cfg.p.PORCENTAJE_EXPENSAS:0; // parámetro PORCENTAJE_EXPENSAS de HS_Parametro_Suscripcion__c
@@ -612,12 +660,12 @@ function renderCotizacion(){
     ["005 Ocupación indebida",`3/${meses}`,base*3/meses]];
   const sa=cobs.reduce((a,c)=>a+c[2],0);
   const pura=sa*COT.tpp, tarifa=pura/(1-COT.gastos), sel=toDec($("sellos").value)/100;
-  const iva=tarifa*COT.iva, ssn=tarifa*COT.ssn, osseg=tarifa*COT.osseg, sellos=tarifa*sel;
+  const iva=tarifa*COT.iva, ssn=tarifa*COT.ssn, osseg=tarifa*COT.osseg;
+  const s=calcSellos(regla,sel,tarifa,tarifa+iva+ssn+osseg,$("tomadorJur").checked), sellos=s.monto;
   const premio=tarifa+iva+ssn+osseg+sellos;
-  const f2=v=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
   $("cot").innerHTML=cobs.map(([n,d,v])=>`<tr><td>${n}<span class="campo">${d}</span></td><td>${fmt(v)}</td></tr>`).join("")+
     `<tr class="tot"><td>Suma asegurada total</td><td>${fmt(sa)}</td></tr>`+
-    [["Prima pura",`TPP ${nf(COT.tpp*100)} %`,pura],["Prima de tarifa","÷ (1 − 50 % de gastos)",tarifa],["IVA","21 %",iva],["Tasa SSN","0,6 %",ssn],["OSSEG","0,5 %",osseg],["Sellos",sel?nf(sel*100)+" %":"sin dato",sellos]]
+    [["Prima pura",`TPP ${nf(COT.tpp*100)} %`,pura],["Prima de tarifa","÷ (1 − 50 % de gastos)",tarifa],["IVA","21 %",iva],["Tasa SSN","0,6 %",ssn],["OSSEG","0,5 %",osseg],["Sellos"+(prov?" · "+prov.toLowerCase().replace(/(^|\s)(?!del\b|de\b)\S/g,c=>c.toUpperCase()):""),s.txt,sellos]]
       .map(([n,d,v])=>`<tr><td>${n}<span class="campo">${d}</span></td><td>${f2(v)}</td></tr>`).join("")+
     `<tr class="tot"><td>Premio (precio total)</td><td>${f2(premio)}</td></tr>`;
   $("cotHint").textContent=op.formato==="Fijo"?"":"Con formato variable se toma fijo + variable calculado por el Omniscript; solo se verificó contra cotizaciones de formato Fijo.";
@@ -860,13 +908,38 @@ function buildParams(){
   $("feBody").innerHTML=cfg.fe.map((r,i)=>`<tr><td class="ref">FE_${r[0]}</td><td class="num">${r[1]==null?"—":fmt(r[1])}</td><td class="num">${r[2]==null?"—":fmt(r[2])}</td><td><input id="fe-${i}" type="number" step="any" value="${r[3]==null?"":r[3]}" placeholder="sin valor"></td></tr>`).join("");
   Object.keys(PARAMS_ORG).forEach(k=>$("p-"+k).oninput=e=>{cfg.p[k]=toDec(e.target.value);saveCfg();run();});
   cfg.fe.forEach((r,i)=>$("fe-"+i).oninput=e=>{r[3]=e.target.value===""?null:Number(e.target.value);saveCfg();run();});
+  buildSellos();
+}
+/* Tabla de sellos editable, una vista por ramo */
+let ramoVista="22";
+function buildSellos(){
+  const conP=ramoVista==="1";
+  $("segRamo").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.ramo===ramoVista)));
+  $("sellosHead").innerHTML=`<tr><th>Provincia</th><th>Base imponible</th><th>Alícuota %</th><th>Mínimo $</th>${conP?"<th>Mínimo PROCREAR $</th>":""}<th>No aplica si base &lt; $</th><th>Observaciones</th></tr>`;
+  const num=(i,k,v)=>`<input type="number" step="any" min="0" data-i="${i}" data-k="${k}" value="${v==null?"":v}" placeholder="—">`;
+  $("sellosBody").innerHTML=cfg.sellos[ramoVista].map((r,i)=>`<tr data-p="${esc(r.p)}"><td>${esc(r.p)}</td>
+    <td><select data-i="${i}" data-k="b"><option value="prima"${r.g&&r.b==="prima"?" selected":""}>Prima</option><option value="premio"${r.g&&r.b==="premio"?" selected":""}>Premio</option><option value="exento"${r.g?"":" selected"}>Exento</option></select></td>
+    <td>${num(i,"a",r.g?r.a:null)}</td><td>${num(i,"min",r.min)}</td>${conP?`<td>${num(i,"minP",r.minP)}</td>`:""}<td>${num(i,"umb",r.umb)}</td>
+    <td class="obs">${esc(r.obs||"")}</td></tr>`).join("");
+  $("sellosNota").textContent=ramoVista==="22"
+    ?"Ramo 22: tabla vigente con las modificaciones 2025. Las modificaciones 2026 no incluyen el ramo 22. Es la que usa la cotización de este plan."
+    :"Ramo 1: tabla 2025 con las modificaciones 2026 (La Pampa, Mendoza, La Rioja, Salta, San Juan, Río Negro y Neuquén). Queda guardada para cotizar otros planes.";
+  marcarProvSellos();
+}
+function marcarProvSellos(){ const p=$("provincia").value; $("sellosBody").querySelectorAll("tr").forEach(tr=>tr.classList.toggle("sel-activo",tr.dataset.p===p)); }
+function editarSellos(e){
+  const el=e.target, i=el.dataset.i, k=el.dataset.k; if(i==null) return;
+  const r=cfg.sellos[ramoVista][i];
+  if(k==="b"){ if(el.value==="exento") r.g=false; else { r.g=true; r.b=el.value; if(r.a==null) r.a=0; } buildSellos(); }
+  else r[k]=el.value===""?null:Number(el.value);
+  saveCfg(); run();
 }
 
 function limpiar(){
   ["cuitInq1","cuitInq2","cuitAval1","cuitAval2","alquilerFijo","provincia","m2","json"].forEach(id=>$(id).value="");
   $("incrementoSumaAsegurada").value="0";
   $("formatoAlquiler").value="Fijo"; $("tieneExpensas").value="si"; $("ubicacion").value="open"; $("duracion").value="12 meses";
-  parsed={personas:{},msgs:[]}; sellosManual=false;
+  parsed={personas:{},msgs:[]}; sellosManual=false; tomManual=false;
   PERSONAS.forEach(([k])=>{ $("ta-"+k).value=""; $("msg-"+k).textContent=""; reemplazando[k]=false; });
   run();
 }
@@ -874,13 +947,18 @@ function limpiar(){
 buildParams(); buildCards(); limpiar();
 $("btnCargarTodos").onclick=cargarTodos;
 $("sellos").addEventListener("input",()=>{ sellosManual=$("sellos").value!==""; renderCotizacion(); });
+$("tomadorJur").addEventListener("change",()=>{ tomManual=true; renderCotizacion(); });
+$("provincia").addEventListener("change",()=>{ sellosManual=false; marcarProvSellos(); });
+$("sellosBody").addEventListener("change",editarSellos);
+$("sellosBody").addEventListener("input",e=>{ if(e.target.tagName==="INPUT") editarSellos(e); });
+$("segRamo").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b){ ramoVista=b.dataset.ramo; buildSellos(); } });
+$("btnCopiarSellos").onclick=async e=>{ const b=e.currentTarget; try{ await navigator.clipboard.writeText(JSON.stringify(cfg.sellos,null,1)); b.textContent="Copiado"; }catch(err){ b.textContent="No se pudo copiar"; } setTimeout(()=>b.textContent="Copiar tabla (JSON)",1500); };
 $("json").addEventListener("paste",()=>setTimeout(cargarTodos,0));
 document.querySelector("#h-op").closest("section").addEventListener("input",run);
 document.querySelector("#h-op").closest("section").addEventListener("change",run);
 $("btnLimpiar").onclick=limpiar;
-$("btnResetParams").onclick=()=>{cfg={p:{...PARAMS_ORG},fe:FE_ORG.map(r=>r.slice())};saveCfg();buildParams();run();};
+$("btnResetParams").onclick=()=>{cfg={p:{...PARAMS_ORG},fe:FE_ORG.map(r=>r.slice()),sellos:sellosOrg()};saveCfg();buildParams();run();};
 })();
 </script>
 
-</body>
-</html>
+</body></html>
