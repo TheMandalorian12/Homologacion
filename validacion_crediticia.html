@@ -612,7 +612,7 @@ function readInput(){ return buildInput(readOp()); }
    TPP = 3,5 % × (1 − gastos 20 % − 30 %) · Prima tarifa = prima pura / (1 − 50 %)
    Premio = prima tarifa × (1 + IVA 21 % + SSN 0,6 % + OSSEG 0,5 % + sellos)
    Sellos: tabla de la provincia, ramo 22 (alícuota, base prima o premio, mínimo y umbral). CAPITAL FEDERAL 1 % sobre prima verificado contra el Omniscript. */
-const COT={tpp:0.035*(1-0.2-0.3),gastos:0.2+0.3,iva:0.21,ssn:0.006,osseg:0.005,expOM:0.2,expCC:0.3,servicios:0.2};
+const COT={tpp:0.035*(1-0.2-0.3),gastos:0.2+0.3,iva:0.21,ssn:0.006,osseg:0.005,servicios:0.2};
 const f2=v=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
 let sellosManual=false, tomManual=false;
 const reglaSellos=(ramo,prov)=>(cfg.sellos[ramo]||[]).find(x=>x.p===prov)||null;
@@ -652,9 +652,11 @@ function renderCotizacion(){
   if(r1) $("sellosIncendio").innerHTML=`<b>Sellos incendio (ramo 1) en ${esc(r1.p)}:</b> ${esc(descRegla(r1))}. Guardado para cotizar otros planes.`;
   if(!(alq>0)){ $("cot").innerHTML=`<tr><td class="hint">Cargá el valor del alquiler para ver la cotización.</td><td></td></tr>`; $("cotHint").textContent=""; return; }
   const base=alq*meses*(1+op.inc/100);
-  const relExp=op.exp==="si"?cfg.p.PORCENTAJE_EXPENSAS:0; // parámetro PORCENTAJE_EXPENSAS de HS_Parametro_Suscripcion__c
+  // Cobertura 002: PORCENTAJE_OPEN_MARKET (25 %) o PORCENTAJE_CENTRO_COMERCIAL (30 %) de HS_Parametro_Suscripcion__c.
+  // CC verificado contra el Omniscript (2.600.000 × 24 → SA 104.000.000). La hoja v6 todavía dice 20 % para Open Market.
+  const relExp=op.exp==="si"?(op.ubic==="cc"?cfg.p.PORCENTAJE_CENTRO_COMERCIAL:cfg.p.PORCENTAJE_OPEN_MARKET):0;
   const cobs=[["001 Alquiler",`${fmt(alq)} × ${meses} × ${nf(1+op.inc/100)}`,base],
-    ["002 Expensas",relExp?pct(relExp):"sin expensas",base*relExp],
+    ["002 Expensas",relExp?`${pct(relExp)} (${op.ubic==="cc"?"centro comercial":"open market"})`:"sin expensas",base*relExp],
     ["004 Depósito en garantía",`1/${meses}`,base/meses],
     ["003 Impuestos, tasas y servicios",pct(COT.servicios),base*COT.servicios],
     ["005 Ocupación indebida",`3/${meses}`,base*3/meses]];
@@ -668,7 +670,7 @@ function renderCotizacion(){
     [["Prima pura",`TPP ${nf(COT.tpp*100)} %`,pura],["Prima de tarifa","÷ (1 − 50 % de gastos)",tarifa],["IVA","21 %",iva],["Tasa SSN","0,6 %",ssn],["OSSEG","0,5 %",osseg],["Sellos"+(prov?" · "+prov.toLowerCase().replace(/(^|\s)(?!del\b|de\b)\S/g,c=>c.toUpperCase()):""),s.txt,sellos]]
       .map(([n,d,v])=>`<tr><td>${n}<span class="campo">${d}</span></td><td>${f2(v)}</td></tr>`).join("")+
     `<tr class="tot"><td>Premio (precio total)</td><td>${f2(premio)}</td></tr>`;
-  $("cotHint").textContent=op.formato==="Fijo"?"":"Con formato variable se toma fijo + variable calculado por el Omniscript; solo se verificó contra cotizaciones de formato Fijo.";
+  $("cotHint").textContent=op.formato==="Variable"?"Con formato Variable se toma el variable calculado por el Omniscript; se verificó contra cotizaciones Fijo y Fijo + variable.":"";
 }
 
 /* ---------- Simulador: qué cambios de la operación modifican el resultado ---------- */
