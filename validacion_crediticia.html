@@ -453,14 +453,13 @@ function evaluar(input,cfg,nombres){
 
   // Cuota contra ingreso (se calcula siempre que todos los CUIT pasaron)
   const cuota=total*factor;
-  const pe=getBool(input,"tieneExpensas")?cfg.p.PORCENTAJE_EXPENSAS:0;
+  // La clase ya reconoce el "Si" que manda el Omniscript (corregido en la org, 13-10-2026)
+  const pe=indicador(input,"tieneExpensas")?cfg.p.PORCENTAJE_EXPENSAS:0;
   const exp=cuota*pe, gar=cuota*cfg.p.PORCENTAJE_GARANTIA, comp=cuota+exp+gar;
   let cc; if("centroComercial" in input) cc=getBool(input,"centroComercial"); else if("openMarket" in input) cc=!getBool(input,"openMarket"); else cc=variable>0;
   const porc=cc?cfg.p.PORCENTAJE_CENTRO_COMERCIAL:cfg.p.PORCENTAJE_OPEN_MARKET;
   const permitido=ingresos*porc;
-  // getBoolean de Apex solo reconoce true/"true": el "Si" que manda el Omniscript se lee como false
-  const expIgnorada=!getBool(input,"tieneExpensas")&&/^s[ií]$/i.test(getStr(input,"tieneExpensas"));
-  out.calc={total,factor,cuota,exp,gar,comp,ingresos,porc,cc,permitido,cubreTodo,expIgnorada};
+  out.calc={total,factor,cuota,exp,gar,comp,ingresos,porc,cc,permitido,cubreTodo};
   const alqMax=permitido/(factor*(1+pe+cfg.p.PORCENTAJE_GARANTIA));
   const faltante=Math.max(0,comp/porc-ingresos);
   const filasIng=PERSONAS.filter(([k])=>out.personas[k]&&out.personas[k].estado!=="na").map(([k,l])=>[`Ingreso ${l}`,juridicaDe(out.personas[k])?SF[CAMPO_FE]:SF.nivelSocioeconomicoIngresoPromedio,out.personas[k].cubre?"sin tope":fmt(out.personas[k].ingreso),out.personas[k].detIngreso||"",null]);
